@@ -79,14 +79,14 @@ ACT.genChapter = async el => {
 VIEWS.lora = () => {
   const m = cur();
   const ch = m.characters.find(c => c.id === Route.a) || null;
-  if (!ch) return `<div class="head"><div><h1>🧪 Laboratorio de LoRA</h1><p class="muted">Crea el look de cada personaje escribiendo normal, corrige con tus palabras, y entrena su LoRA.</p></div></div>
+  if (!ch) return `<div class="head"><div><h1>🧪 Laboratorio de LoRA</h1><p class="muted">Crea el look de cada personaje escribiendo normal, corrige con tus palabras, y entrena su LoRA.</p></div><div class="row"><button data-a="dlLoras">⬇ Todos los LoRAs (Word)</button></div></div>
     ${m.characters.length ? `<div class="cards">${m.characters.map(c => `<div class="card hov ecard" data-a="go" data-to="${mlink(m, 'lora', c.id)}">${entThumb(m, 'personajes', c)}<div><h3>${esc(c.name)}</h3><div class="row" style="margin-top:6px">${c.visualPrompt ? '<span class="chip ok">Look guardado</span>' : '<span class="chip">Sin look</span>'}${c.loraId ? `<span class="chip neon">LoRA v${c.loraVersion || 1}</span>` : ''}${c.training && !['COMPLETED', 'FAILED'].includes(c.training.status) ? '<span class="chip warn">Entrenando…</span>' : ''}</div></div></div>`).join('')}</div>` : `<div class="empty">Primero crea un personaje en Universo → Personajes.</div>`}`;
   const lab = (ch.lab ||= { desc: ch.appearance ? `${ch.name}: ${ch.appearance}` : '', rounds: [], chosen: null });
   const upd = (ch.upd ||= { change: '', imgs: [], prompt: '', chosen: null });
   const tr = ch.training;
   const imgTile = (id, kind) => { const i = m.images[id]; if (!i) return ''; const chosen = kind === 'lab' ? lab.chosen === id : upd.chosen === id; return `<div class="ithumb ${chosen ? 'on' : ''}" data-a="${kind === 'lab' ? 'labPick' : 'updPick'}" data-id="${id}"><img data-img="${id}" alt=""><button class="heart sm" data-a="likeImg" data-id="${id}">${i.liked ? '♥' : '♡'}</button><div class="cap"><span>seed ${i.seed ?? '?'}</span>${chosen ? '<span class="chip ok">Elegida</span>' : ''}</div></div>`; };
   return `<div class="head"><div class="row nw">${entThumb(m, 'personajes', ch)}<div><h1>🧪 ${esc(ch.name)}</h1><p class="muted">Laboratorio de LoRA · ${ch.loraId ? `LoRA v${ch.loraVersion || 1} activo` : 'sin LoRA entrenado'}${ch.trigger ? ' · trigger <span class="kbd">' + esc(ch.trigger) + '</span>' : ''}</p></div></div>
-    <div class="row"><button data-a="go" data-to="${mlink(m, 'lora')}">← Personajes</button><button data-a="go" data-to="${mlink(m, 'wiki', 'personajes', ch.id)}">Ver ficha</button></div></div>
+    <div class="row"><button data-a="go" data-to="${mlink(m, 'lora')}">← Personajes</button><button data-a="go" data-to="${mlink(m, 'wiki', 'personajes', ch.id)}">Ver ficha</button>${ch.loraId ? `<button class="pri" data-a="dlLora" data-id="${ch.id}">⬇ Descargar LoRA</button>` : ''}<button data-a="dlCharImgs" data-id="${ch.id}">⬇ Imágenes</button></div></div>
     ${!S.user ? '<div class="alert warn" style="margin-bottom:14px">Inicia sesión y guarda tu API key de Fal.ai en Configuración para generar.</div>' : ''}
 
     <div class="sect panelbox"><h2>1 · Describe a tu personaje como quieras</h2>

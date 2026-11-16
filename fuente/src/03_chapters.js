@@ -70,7 +70,7 @@ VIEWS.cap = () => {
   const dead = localDeadCheck(m, c);
   const genN = (c.panels || []).filter(p => p.approved && !p.imageId).length;
   return `<div class="head"><div><h1>Cap ${c.number} · ${esc(c.title || 'Sin título')}</h1><div class="row" style="margin-top:6px">${statusChip(c.status)}<span class="chip">${plural(c.panels.length, 'panel', 'paneles')}</span></div></div>
-    <div class="row"><button data-a="go" data-to="${mlink(m, 'caps')}">← Capítulos</button><button data-a="go" data-to="${mlink(m, 'armador', c.id)}">🧩 Armador</button><button class="danger" data-a="delCap" data-id="${c.id}">🗑️</button></div></div>
+    <div class="row"><button data-a="go" data-to="${mlink(m, 'caps')}">← Capítulos</button><button data-a="go" data-to="${mlink(m, 'armador', c.id)}">🧩 Armador</button><button data-a="dlChapter" data-id="${c.id}">⬇ Guion (Word)</button><button data-a="dlChapter" data-id="${c.id}" data-img="1">⬇ Word con imágenes</button><button data-a="dlChapterImgs" data-id="${c.id}">⬇ Imágenes</button><button class="danger" data-a="delCap" data-id="${c.id}">🗑️</button></div></div>
 
     <div class="grid2">
       <div class="panelbox"><h2>✍️ Escribir guion con IA</h2>

@@ -147,8 +147,8 @@ VIEWS.biblia = () => {
   const m = cur(); const b = m.bible; const st = b.style;
   const caps = chapterList(m);
   return `<div class="head"><div><h1>🧠 ${esc(m.name)}</h1><p class="muted">La Biblia es la memoria total de este manhwa. Todo lo que escribas aquí lo usa la IA.</p></div>
-    <div class="row"><button class="pri" data-a="importBible">📄 SUBIR MI BIBLIA (Word / PDF)</button><button data-a="go" data-to="${mlink(m, 'caps')}">📖 Capítulos (${caps.length})</button><button data-a="go" data-to="${mlink(m, 'lector', 'novela')}">🎧 Leer como novela</button></div></div>
-    <div class="alert info small" style="margin-bottom:14px">📄 ¿Ya tienes tu biblia escrita? Súbela en Word (.docx), PDF o texto y reparto todo solo: historia, personajes, lugares, poderes, objetos, facciones, línea de tiempo y fichas canon. Tú revisas y apruebas antes de guardar.</div>
+    <div class="row"><button class="pri" data-a="importBible">📄 SUBIR MI BIBLIA (Word / PDF)</button><button class="pri" data-a="dlBible">📥 DESCARGAR MI BIBLIA (Word)</button><button class="pri" data-a="dlAll">📦 DESCARGAR TODO</button><button data-a="dlBibleOnly">⬇ Solo historia</button><button data-a="go" data-to="${mlink(m, 'caps')}">📖 Capítulos (${caps.length})</button><button data-a="go" data-to="${mlink(m, 'lector', 'novela')}">🎧 Leer como novela</button></div></div>
+    <div class="alert info small" style="margin-bottom:14px"><div>📄 ¿Ya tienes tu biblia escrita? Súbela en Word (.docx), PDF o texto y reparto todo solo: historia, personajes, lugares, poderes, objetos, facciones, línea de tiempo y fichas canon. Tú revisas y apruebas antes de guardar.<br>📥 <b>Descargar mi biblia</b> crea un Word siempre actualizado con todo lo que tienes en la app (con fotos y LoRAs). <b>Descargar todo</b> agrega imágenes, videos, audios y archivos LoRA en un .zip. Cada personaje, lugar, sección, capítulo, imagen y video también tiene su propio botón ⬇.</div></div>
     <div class="grid2">
       <div class="panelbox"><h2>Historia</h2>
         <label class="f">Nombre del manhwa<input ${bindAttr(m, 'name')} value="${esc(m.name)}"></label>
@@ -203,7 +203,7 @@ VIEWS.wiki = () => {
   const wikiAudio = { personajes: 'personajes', lugares: 'lugares', poderes: 'poderes' }[t];
   return `<div class="head"><div><h1>${T.icon} ${T.label}</h1><p class="muted">Constructor de universo de <b>${esc(m.name)}</b>.</p></div>
     <div class="row">${wikiAudio ? `<button data-a="go" data-to="${mlink(m, 'lector', 'universo', wikiAudio)}">🎧 Escuchar solo ${T.label.toLowerCase()}</button>` : `<button data-a="go" data-to="${mlink(m, 'lector', 'universo')}">🎧 Escuchar mi universo</button>`}
-    <button data-a="go" data-to="${mlink(m, 'ideas', t)}">💡 Dame ideas</button><button class="pri" data-a="go" data-to="${mlink(m, 'wiki', t, 'nuevo')}">＋ Nuevo ${T.one}</button></div></div>
+    <button data-a="dlSection" data-t="${t}">⬇ Descargar ${T.label.toLowerCase()} (Word)</button><button data-a="go" data-to="${mlink(m, 'ideas', t)}">💡 Dame ideas</button><button class="pri" data-a="go" data-to="${mlink(m, 'wiki', t, 'nuevo')}">＋ Nuevo ${T.one}</button></div></div>
     <input id="wfilter" placeholder="Filtrar ${T.label.toLowerCase()}…" style="margin-bottom:14px">
     ${arr.length ? `<div class="cards" id="wlist">${arr.map(e => `<div class="card hov ecard" data-name="${esc(norm(e.name))}" data-a="go" data-to="${mlink(m, 'wiki', t, e.id)}">${entThumb(m, t, e)}<div class="grow"><h3>${esc(e.name || '(sin nombre)')}</h3><div class="small muted">${esc(entSub(t, e))}</div>${t === 'personajes' && (e.loraId || e.trigger) ? `<div class="row" style="margin-top:6px">${e.trigger ? `<span class="chip neon">${esc(e.trigger)}</span>` : ''}${e.loraId ? '<span class="chip ok">LoRA</span>' : ''}</div>` : ''}</div></div>`).join('')}</div>`
       : `<div class="empty">Aún no hay ${T.label.toLowerCase()}. Crea uno o pide ideas.</div>`}`;
@@ -224,7 +224,7 @@ function entityView(m, t, e) {
   const caps = chaptersMentioning(m, e.name);
   const canon = m.canon.filter(f => norm(f.entity) === norm(e.name));
   return `<div class="head"><div class="row nw">${entThumb(m, t, e).replace('class="thumb"', 'class="thumb" style="width:84px;height:84px"')}<div><h1>${esc(e.name)}</h1><p class="muted">${T.icon} ${T.one}${e.nickname ? ' · "' + esc(e.nickname) + '"' : ''}</p></div></div>
-    <div class="row"><button data-a="go" data-to="${mlink(m, 'wiki', t)}">← ${T.label}</button>${t === 'personajes' ? `<button data-a="go" data-to="${mlink(m, 'lora', e.id)}">🧪 Laboratorio LoRA</button>` : ''}<button class="pri" data-a="go" data-to="${mlink(m, 'wiki', t, e.id, 'editar')}">✏️ Editar</button><button class="danger" data-a="delEntity" data-t="${t}" data-id="${e.id}">🗑️ Borrar</button></div></div>
+    <div class="row"><button data-a="go" data-to="${mlink(m, 'wiki', t)}">← ${T.label}</button>${t === 'personajes' ? `<button data-a="go" data-to="${mlink(m, 'lora', e.id)}">🧪 Laboratorio LoRA</button>` : ''}<button data-a="dlEntity" data-t="${t}" data-id="${e.id}">⬇ Word</button>${t === 'personajes' ? `<button data-a="dlCharImgs" data-id="${e.id}">⬇ Imágenes</button>${e.loraId ? `<button data-a="dlLora" data-id="${e.id}">⬇ LoRA</button>` : ''}` : ''}<button class="pri" data-a="go" data-to="${mlink(m, 'wiki', t, e.id, 'editar')}">✏️ Editar</button><button class="danger" data-a="delEntity" data-t="${t}" data-id="${e.id}">🗑️ Borrar</button></div></div>
     <div class="grid2">
       <div class="panelbox"><dl class="kv">${T.fields.filter(([k]) => k !== 'name' && e[k] !== undefined && e[k] !== '').map(([k, l]) => `<dt>${esc(l)}</dt><dd>${esc(e[k])}</dd>`).join('')}</dl></div>
       <div class="col">
@@ -321,7 +321,7 @@ VIEWS.canon = () => {
   const names = [...new Set([...m.characters, ...m.places, ...m.objects, ...m.factions, ...m.powers].map(x => x.name).filter(Boolean))];
   const list = [...m.canon].sort((a, b) => (a.entity || '').localeCompare(b.entity || '') || (a.since || 0) - (b.since || 0));
   return `<div class="head"><div><h1>📌 Fichas Canon</h1><p class="muted">Hechos fijos de tu historia: <span class="kbd">Kael · cicatriz · ceja izquierda · desde Cap 3</span>. El detector de continuidad los usa para avisarte.</p></div>
-    <div class="row"><button class="pri" data-a="addCanon">＋ Nueva ficha</button></div></div>
+    <div class="row"><button data-a="dlCanon">⬇ Descargar (Word)</button><button class="pri" data-a="addCanon">＋ Nueva ficha</button></div></div>
     <datalist id="entnames">${names.map(n => `<option value="${esc(n)}">`).join('')}</datalist>
     <div class="alert info" style="margin-bottom:14px">💡 Para muertes usa el atributo <b>estado</b> con valor <b>muerto</b>. Para emociones usa <b>emoción</b>. Así te aviso si alguien aparece vivo o cambia de humor sin motivo.</div>
     ${list.length ? `<div class="panelbox scrollx"><table class="t"><thead><tr><th>Quién / qué</th><th>Atributo</th><th>Valor</th><th>Desde Cap</th><th>Nota</th><th></th></tr></thead><tbody>
@@ -429,8 +429,8 @@ VIEWS.buscar = () => {
 /* ---------------- Galería ---------------- */
 VIEWS.galeria = () => {
   const m = cur(); const imgs = Object.values(m.images || {}).sort((a, b) => b.createdAt - a.createdAt);
-  return `<div class="head"><div><h1>🗃️ Galería</h1><p class="muted">${plural(imgs.length, 'imagen', 'imágenes')} de este manhwa (subidas y generadas). ♥ guarda la semilla y configuración.</p></div><div class="row"><button class="pri" data-a="galUpload">📤 Subir imágenes</button></div></div>
-    ${imgs.length ? `<div class="igrid">${imgs.map(i => `<div class="ithumb"><img data-img="${i.id}" alt=""><button class="heart sm" data-a="likeImg" data-id="${i.id}">${i.liked ? '♥' : '♡'}</button><div class="cap"><span>${esc(i.source || '')}${i.seed != null ? ' · seed ' + i.seed : ''}</span><button class="sm icon danger" data-a="delImg" data-id="${i.id}">🗑️</button></div></div>`).join('')}</div>` : '<div class="empty">Sin imágenes todavía.</div>'}`;
+  return `<div class="head"><div><h1>🗃️ Galería</h1><p class="muted">${plural(imgs.length, 'imagen', 'imágenes')} de este manhwa (subidas y generadas). ♥ guarda la semilla y configuración.</p></div><div class="row"><button data-a="dlAll">📦 Descargar todo</button><button class="pri" data-a="galUpload">📤 Subir imágenes</button></div></div>
+    ${imgs.length ? `<div class="igrid">${imgs.map(i => `<div class="ithumb"><img data-img="${i.id}" alt=""><button class="heart sm" data-a="likeImg" data-id="${i.id}">${i.liked ? '♥' : '♡'}</button><div class="cap"><span>${esc(i.source || '')}${i.seed != null ? ' · seed ' + i.seed : ''}</span><button class="sm icon" data-a="dlImg" data-id="${i.id}" title="Descargar">⬇</button><button class="sm icon danger" data-a="delImg" data-id="${i.id}">🗑️</button></div></div>`).join('')}</div>` : '<div class="empty">Sin imágenes todavía.</div>'}`;
 };
 ACT.galUpload = async () => { const m = cur(); const fs = await pickFiles(); for (const f of fs) await addImage(m, f, { source: 'subida' }); render(); toast(`${fs.length} imagen(es) agregadas`, 'ok'); };
 ACT.delImg = async el => { const m = cur(); if (!await confirmBox('¿Seguro que quieres borrar esta imagen? Se quitará de paneles y armador.')) return; await deleteImage(m, el.dataset.id); render(); };

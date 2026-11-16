@@ -1049,8 +1049,8 @@ VIEWS.biblia = () => {
   const m = cur(); const b = m.bible; const st = b.style;
   const caps = chapterList(m);
   return `<div class="head"><div><h1>🧠 ${esc(m.name)}</h1><p class="muted">La Biblia es la memoria total de este manhwa. Todo lo que escribas aquí lo usa la IA.</p></div>
-    <div class="row"><button class="pri" data-a="importBible">📄 SUBIR MI BIBLIA (Word / PDF)</button><button data-a="go" data-to="${mlink(m, 'caps')}">📖 Capítulos (${caps.length})</button><button data-a="go" data-to="${mlink(m, 'lector', 'novela')}">🎧 Leer como novela</button></div></div>
-    <div class="alert info small" style="margin-bottom:14px">📄 ¿Ya tienes tu biblia escrita? Súbela en Word (.docx), PDF o texto y reparto todo solo: historia, personajes, lugares, poderes, objetos, facciones, línea de tiempo y fichas canon. Tú revisas y apruebas antes de guardar.</div>
+    <div class="row"><button class="pri" data-a="importBible">📄 SUBIR MI BIBLIA (Word / PDF)</button><button class="pri" data-a="dlBible">📥 DESCARGAR MI BIBLIA (Word)</button><button class="pri" data-a="dlAll">📦 DESCARGAR TODO</button><button data-a="dlBibleOnly">⬇ Solo historia</button><button data-a="go" data-to="${mlink(m, 'caps')}">📖 Capítulos (${caps.length})</button><button data-a="go" data-to="${mlink(m, 'lector', 'novela')}">🎧 Leer como novela</button></div></div>
+    <div class="alert info small" style="margin-bottom:14px"><div>📄 ¿Ya tienes tu biblia escrita? Súbela en Word (.docx), PDF o texto y reparto todo solo: historia, personajes, lugares, poderes, objetos, facciones, línea de tiempo y fichas canon. Tú revisas y apruebas antes de guardar.<br>📥 <b>Descargar mi biblia</b> crea un Word siempre actualizado con todo lo que tienes en la app (con fotos y LoRAs). <b>Descargar todo</b> agrega imágenes, videos, audios y archivos LoRA en un .zip. Cada personaje, lugar, sección, capítulo, imagen y video también tiene su propio botón ⬇.</div></div>
     <div class="grid2">
       <div class="panelbox"><h2>Historia</h2>
         <label class="f">Nombre del manhwa<input ${bindAttr(m, 'name')} value="${esc(m.name)}"></label>
@@ -1105,7 +1105,7 @@ VIEWS.wiki = () => {
   const wikiAudio = { personajes: 'personajes', lugares: 'lugares', poderes: 'poderes' }[t];
   return `<div class="head"><div><h1>${T.icon} ${T.label}</h1><p class="muted">Constructor de universo de <b>${esc(m.name)}</b>.</p></div>
     <div class="row">${wikiAudio ? `<button data-a="go" data-to="${mlink(m, 'lector', 'universo', wikiAudio)}">🎧 Escuchar solo ${T.label.toLowerCase()}</button>` : `<button data-a="go" data-to="${mlink(m, 'lector', 'universo')}">🎧 Escuchar mi universo</button>`}
-    <button data-a="go" data-to="${mlink(m, 'ideas', t)}">💡 Dame ideas</button><button class="pri" data-a="go" data-to="${mlink(m, 'wiki', t, 'nuevo')}">＋ Nuevo ${T.one}</button></div></div>
+    <button data-a="dlSection" data-t="${t}">⬇ Descargar ${T.label.toLowerCase()} (Word)</button><button data-a="go" data-to="${mlink(m, 'ideas', t)}">💡 Dame ideas</button><button class="pri" data-a="go" data-to="${mlink(m, 'wiki', t, 'nuevo')}">＋ Nuevo ${T.one}</button></div></div>
     <input id="wfilter" placeholder="Filtrar ${T.label.toLowerCase()}…" style="margin-bottom:14px">
     ${arr.length ? `<div class="cards" id="wlist">${arr.map(e => `<div class="card hov ecard" data-name="${esc(norm(e.name))}" data-a="go" data-to="${mlink(m, 'wiki', t, e.id)}">${entThumb(m, t, e)}<div class="grow"><h3>${esc(e.name || '(sin nombre)')}</h3><div class="small muted">${esc(entSub(t, e))}</div>${t === 'personajes' && (e.loraId || e.trigger) ? `<div class="row" style="margin-top:6px">${e.trigger ? `<span class="chip neon">${esc(e.trigger)}</span>` : ''}${e.loraId ? '<span class="chip ok">LoRA</span>' : ''}</div>` : ''}</div></div>`).join('')}</div>`
       : `<div class="empty">Aún no hay ${T.label.toLowerCase()}. Crea uno o pide ideas.</div>`}`;
@@ -1126,7 +1126,7 @@ function entityView(m, t, e) {
   const caps = chaptersMentioning(m, e.name);
   const canon = m.canon.filter(f => norm(f.entity) === norm(e.name));
   return `<div class="head"><div class="row nw">${entThumb(m, t, e).replace('class="thumb"', 'class="thumb" style="width:84px;height:84px"')}<div><h1>${esc(e.name)}</h1><p class="muted">${T.icon} ${T.one}${e.nickname ? ' · "' + esc(e.nickname) + '"' : ''}</p></div></div>
-    <div class="row"><button data-a="go" data-to="${mlink(m, 'wiki', t)}">← ${T.label}</button>${t === 'personajes' ? `<button data-a="go" data-to="${mlink(m, 'lora', e.id)}">🧪 Laboratorio LoRA</button>` : ''}<button class="pri" data-a="go" data-to="${mlink(m, 'wiki', t, e.id, 'editar')}">✏️ Editar</button><button class="danger" data-a="delEntity" data-t="${t}" data-id="${e.id}">🗑️ Borrar</button></div></div>
+    <div class="row"><button data-a="go" data-to="${mlink(m, 'wiki', t)}">← ${T.label}</button>${t === 'personajes' ? `<button data-a="go" data-to="${mlink(m, 'lora', e.id)}">🧪 Laboratorio LoRA</button>` : ''}<button data-a="dlEntity" data-t="${t}" data-id="${e.id}">⬇ Word</button>${t === 'personajes' ? `<button data-a="dlCharImgs" data-id="${e.id}">⬇ Imágenes</button>${e.loraId ? `<button data-a="dlLora" data-id="${e.id}">⬇ LoRA</button>` : ''}` : ''}<button class="pri" data-a="go" data-to="${mlink(m, 'wiki', t, e.id, 'editar')}">✏️ Editar</button><button class="danger" data-a="delEntity" data-t="${t}" data-id="${e.id}">🗑️ Borrar</button></div></div>
     <div class="grid2">
       <div class="panelbox"><dl class="kv">${T.fields.filter(([k]) => k !== 'name' && e[k] !== undefined && e[k] !== '').map(([k, l]) => `<dt>${esc(l)}</dt><dd>${esc(e[k])}</dd>`).join('')}</dl></div>
       <div class="col">
@@ -1223,7 +1223,7 @@ VIEWS.canon = () => {
   const names = [...new Set([...m.characters, ...m.places, ...m.objects, ...m.factions, ...m.powers].map(x => x.name).filter(Boolean))];
   const list = [...m.canon].sort((a, b) => (a.entity || '').localeCompare(b.entity || '') || (a.since || 0) - (b.since || 0));
   return `<div class="head"><div><h1>📌 Fichas Canon</h1><p class="muted">Hechos fijos de tu historia: <span class="kbd">Kael · cicatriz · ceja izquierda · desde Cap 3</span>. El detector de continuidad los usa para avisarte.</p></div>
-    <div class="row"><button class="pri" data-a="addCanon">＋ Nueva ficha</button></div></div>
+    <div class="row"><button data-a="dlCanon">⬇ Descargar (Word)</button><button class="pri" data-a="addCanon">＋ Nueva ficha</button></div></div>
     <datalist id="entnames">${names.map(n => `<option value="${esc(n)}">`).join('')}</datalist>
     <div class="alert info" style="margin-bottom:14px">💡 Para muertes usa el atributo <b>estado</b> con valor <b>muerto</b>. Para emociones usa <b>emoción</b>. Así te aviso si alguien aparece vivo o cambia de humor sin motivo.</div>
     ${list.length ? `<div class="panelbox scrollx"><table class="t"><thead><tr><th>Quién / qué</th><th>Atributo</th><th>Valor</th><th>Desde Cap</th><th>Nota</th><th></th></tr></thead><tbody>
@@ -1331,8 +1331,8 @@ VIEWS.buscar = () => {
 /* ---------------- Galería ---------------- */
 VIEWS.galeria = () => {
   const m = cur(); const imgs = Object.values(m.images || {}).sort((a, b) => b.createdAt - a.createdAt);
-  return `<div class="head"><div><h1>🗃️ Galería</h1><p class="muted">${plural(imgs.length, 'imagen', 'imágenes')} de este manhwa (subidas y generadas). ♥ guarda la semilla y configuración.</p></div><div class="row"><button class="pri" data-a="galUpload">📤 Subir imágenes</button></div></div>
-    ${imgs.length ? `<div class="igrid">${imgs.map(i => `<div class="ithumb"><img data-img="${i.id}" alt=""><button class="heart sm" data-a="likeImg" data-id="${i.id}">${i.liked ? '♥' : '♡'}</button><div class="cap"><span>${esc(i.source || '')}${i.seed != null ? ' · seed ' + i.seed : ''}</span><button class="sm icon danger" data-a="delImg" data-id="${i.id}">🗑️</button></div></div>`).join('')}</div>` : '<div class="empty">Sin imágenes todavía.</div>'}`;
+  return `<div class="head"><div><h1>🗃️ Galería</h1><p class="muted">${plural(imgs.length, 'imagen', 'imágenes')} de este manhwa (subidas y generadas). ♥ guarda la semilla y configuración.</p></div><div class="row"><button data-a="dlAll">📦 Descargar todo</button><button class="pri" data-a="galUpload">📤 Subir imágenes</button></div></div>
+    ${imgs.length ? `<div class="igrid">${imgs.map(i => `<div class="ithumb"><img data-img="${i.id}" alt=""><button class="heart sm" data-a="likeImg" data-id="${i.id}">${i.liked ? '♥' : '♡'}</button><div class="cap"><span>${esc(i.source || '')}${i.seed != null ? ' · seed ' + i.seed : ''}</span><button class="sm icon" data-a="dlImg" data-id="${i.id}" title="Descargar">⬇</button><button class="sm icon danger" data-a="delImg" data-id="${i.id}">🗑️</button></div></div>`).join('')}</div>` : '<div class="empty">Sin imágenes todavía.</div>'}`;
 };
 ACT.galUpload = async () => { const m = cur(); const fs = await pickFiles(); for (const f of fs) await addImage(m, f, { source: 'subida' }); render(); toast(`${fs.length} imagen(es) agregadas`, 'ok'); };
 ACT.delImg = async el => { const m = cur(); if (!await confirmBox('¿Seguro que quieres borrar esta imagen? Se quitará de paneles y armador.')) return; await deleteImage(m, el.dataset.id); render(); };
@@ -1410,7 +1410,7 @@ VIEWS.cap = () => {
   const dead = localDeadCheck(m, c);
   const genN = (c.panels || []).filter(p => p.approved && !p.imageId).length;
   return `<div class="head"><div><h1>Cap ${c.number} · ${esc(c.title || 'Sin título')}</h1><div class="row" style="margin-top:6px">${statusChip(c.status)}<span class="chip">${plural(c.panels.length, 'panel', 'paneles')}</span></div></div>
-    <div class="row"><button data-a="go" data-to="${mlink(m, 'caps')}">← Capítulos</button><button data-a="go" data-to="${mlink(m, 'armador', c.id)}">🧩 Armador</button><button class="danger" data-a="delCap" data-id="${c.id}">🗑️</button></div></div>
+    <div class="row"><button data-a="go" data-to="${mlink(m, 'caps')}">← Capítulos</button><button data-a="go" data-to="${mlink(m, 'armador', c.id)}">🧩 Armador</button><button data-a="dlChapter" data-id="${c.id}">⬇ Guion (Word)</button><button data-a="dlChapter" data-id="${c.id}" data-img="1">⬇ Word con imágenes</button><button data-a="dlChapterImgs" data-id="${c.id}">⬇ Imágenes</button><button class="danger" data-a="delCap" data-id="${c.id}">🗑️</button></div></div>
 
     <div class="grid2">
       <div class="panelbox"><h2>✍️ Escribir guion con IA</h2>
@@ -2760,14 +2760,14 @@ ACT.genChapter = async el => {
 VIEWS.lora = () => {
   const m = cur();
   const ch = m.characters.find(c => c.id === Route.a) || null;
-  if (!ch) return `<div class="head"><div><h1>🧪 Laboratorio de LoRA</h1><p class="muted">Crea el look de cada personaje escribiendo normal, corrige con tus palabras, y entrena su LoRA.</p></div></div>
+  if (!ch) return `<div class="head"><div><h1>🧪 Laboratorio de LoRA</h1><p class="muted">Crea el look de cada personaje escribiendo normal, corrige con tus palabras, y entrena su LoRA.</p></div><div class="row"><button data-a="dlLoras">⬇ Todos los LoRAs (Word)</button></div></div>
     ${m.characters.length ? `<div class="cards">${m.characters.map(c => `<div class="card hov ecard" data-a="go" data-to="${mlink(m, 'lora', c.id)}">${entThumb(m, 'personajes', c)}<div><h3>${esc(c.name)}</h3><div class="row" style="margin-top:6px">${c.visualPrompt ? '<span class="chip ok">Look guardado</span>' : '<span class="chip">Sin look</span>'}${c.loraId ? `<span class="chip neon">LoRA v${c.loraVersion || 1}</span>` : ''}${c.training && !['COMPLETED', 'FAILED'].includes(c.training.status) ? '<span class="chip warn">Entrenando…</span>' : ''}</div></div></div>`).join('')}</div>` : `<div class="empty">Primero crea un personaje en Universo → Personajes.</div>`}`;
   const lab = (ch.lab ||= { desc: ch.appearance ? `${ch.name}: ${ch.appearance}` : '', rounds: [], chosen: null });
   const upd = (ch.upd ||= { change: '', imgs: [], prompt: '', chosen: null });
   const tr = ch.training;
   const imgTile = (id, kind) => { const i = m.images[id]; if (!i) return ''; const chosen = kind === 'lab' ? lab.chosen === id : upd.chosen === id; return `<div class="ithumb ${chosen ? 'on' : ''}" data-a="${kind === 'lab' ? 'labPick' : 'updPick'}" data-id="${id}"><img data-img="${id}" alt=""><button class="heart sm" data-a="likeImg" data-id="${id}">${i.liked ? '♥' : '♡'}</button><div class="cap"><span>seed ${i.seed ?? '?'}</span>${chosen ? '<span class="chip ok">Elegida</span>' : ''}</div></div>`; };
   return `<div class="head"><div class="row nw">${entThumb(m, 'personajes', ch)}<div><h1>🧪 ${esc(ch.name)}</h1><p class="muted">Laboratorio de LoRA · ${ch.loraId ? `LoRA v${ch.loraVersion || 1} activo` : 'sin LoRA entrenado'}${ch.trigger ? ' · trigger <span class="kbd">' + esc(ch.trigger) + '</span>' : ''}</p></div></div>
-    <div class="row"><button data-a="go" data-to="${mlink(m, 'lora')}">← Personajes</button><button data-a="go" data-to="${mlink(m, 'wiki', 'personajes', ch.id)}">Ver ficha</button></div></div>
+    <div class="row"><button data-a="go" data-to="${mlink(m, 'lora')}">← Personajes</button><button data-a="go" data-to="${mlink(m, 'wiki', 'personajes', ch.id)}">Ver ficha</button>${ch.loraId ? `<button class="pri" data-a="dlLora" data-id="${ch.id}">⬇ Descargar LoRA</button>` : ''}<button data-a="dlCharImgs" data-id="${ch.id}">⬇ Imágenes</button></div></div>
     ${!S.user ? '<div class="alert warn" style="margin-bottom:14px">Inicia sesión y guarda tu API key de Fal.ai en Configuración para generar.</div>' : ''}
 
     <div class="sect panelbox"><h2>1 · Describe a tu personaje como quieras</h2>
@@ -4156,7 +4156,7 @@ VIEWS.video = () => {
   </div>
   <div class="ved-tl panelbox">
     <div class="row tl-tools"><b class="mono yelt" id="tlTime">0:00.00</b>
-      <button class="sm" data-a="vCut" title="Cortar (S)">✂ Cortar <span class="kbd">S</span></button><button class="sm" data-a="vDupClip">Duplicar</button><button class="sm" data-a="vDelClip">Borrar ⌫</button>
+      <button class="sm" data-a="vCut" title="Cortar (S)">✂ Cortar <span class="kbd">S</span></button><button class="sm" data-a="vDupClip">Duplicar</button><button class="sm" data-a="vDelClip">Borrar ⌫</button><button class="sm" data-a="dlClipMedia" title="Descargar el archivo original de este clip">⬇ Clip</button>
       <select class="sm-sel" data-change="vAddSong"><option value="">＋ Agregar canción…</option><optgroup label="Hecha con código">${Object.entries(MUSIC_STYLES).map(([k, x]) => `<option value="syn:${k}">${x}</option>`).join('')}</optgroup><optgroup label="Tus canciones">${Object.values(m.media || {}).filter(x => x.type === 'audio' && x.kind === 'song').map(x => `<option value="md:${x.id}">${esc(x.name)}</option>`).join('')}</optgroup></select>
       <button class="sm" data-a="vAddTake">＋ Agregar toma</button><button class="sm" data-a="vAddBroll">＋ B-roll</button><button class="sm" data-a="vUpSong">Subir canción</button>
       <select class="sm-sel" data-change="vAddSfx"><option value="">＋ Agregar sonido…</option><optgroup label="Hechos con código">${Object.entries(SFX_TYPES).map(([k, x]) => `<option value="syn:${k}">${x}</option>`).join('')}</optgroup><optgroup label="Tus sonidos">${Object.values(m.media || {}).filter(x => x.type === 'audio' && x.kind === 'sfx').map(x => `<option value="md:${x.id}">${esc(x.name)}</option>`).join('')}</optgroup></select>
@@ -4167,7 +4167,7 @@ VIEWS.video = () => {
       <button class="sm" data-a="vSave">Guardar</button><button class="sm" data-a="vSendClaude">Enviar a Claude</button></div>
     <div class="row tl-tools"><button class="sm pri" data-a="vRecord" id="recBtn">🎙️ GRABAR MI VOZ</button><button class="sm" data-a="vTTS">🗣️ VOZ DEL NAVEGADOR</button><button class="sm" data-a="vUpVoice">📤 SUBIR MI AUDIO</button><button class="sm" data-a="vSilence">🔇 QUITAR SILENCIOS</button><button class="sm" data-a="vAddText">＋ Texto</button>
       <button class="sm ${v.subs.on ? 'yel' : ''}" data-a="vSubs">💬 Subtítulos ${v.subs.on ? 'ON' : 'OFF'}</button>${v.subs.on ? `<select class="sm-sel" data-change="vSubStyle">${Object.entries(SUB_STYLES).map(([k, x]) => `<option value="${k}" ${v.subs.style === k ? 'selected' : ''}>${x}</option>`).join('')}</select>` : ''}
-      <span class="grow"></span><span class="small muted">Exportar:</span><button class="sm pri" data-a="vExport" data-f="tiktok">TIKTOK 1080×1920</button><button class="sm pri" data-a="vExport" data-f="reels">REELS</button><button class="sm pri" data-a="vExport" data-f="youtube">YOUTUBE 1920×1080</button></div>
+      <span class="grow"></span><button class="sm" data-a="dlVideoFiles" data-id="${v.id}" title="Todos los archivos originales del proyecto">⬇ Archivos</button><span class="small muted">Exportar:</span><button class="sm pri" data-a="vExport" data-f="tiktok">TIKTOK 1080×1920</button><button class="sm pri" data-a="vExport" data-f="reels">REELS</button><button class="sm pri" data-a="vExport" data-f="youtube">YOUTUBE 1920×1080</button></div>
     <div id="inspector">${sel ? inspectorHTML(m, v, sel) : '<div class="small muted" style="padding:8px 2px">Toca un clip para ver sus opciones. Arrastra para moverlo, jala los bordes para recortarlo.</div>'}</div>
     <div class="tl" id="tl"></div>
   </div></div>`;
@@ -4716,6 +4716,147 @@ function showImportReview(m, res, fname) {
     toast('Guardado ✔ ' + Object.entries(counts).map(([k, n]) => `${n} ${k.toLowerCase()}`).join(' · '), 'ok');
   };
 }
+
+/* =====================================================================
+   DESCARGAS: biblia en Word siempre actualizada, cada cosa por separado
+   (personaje, lugar, poder, sección, capítulo, imagen, LoRA, video) y
+   un paquete con TODO (Word + imágenes + videos + audios + LoRAs + datos).
+   ===================================================================== */
+const DOCX_URL = 'https://cdn.jsdelivr.net/npm/docx@8.5.0/build/index.iife.js';
+async function docxLib() { if (!window.docx) await loadScript(DOCX_URL); if (!window.docx) throw new Error('No pude cargar el creador de Word. Revisa tu internet.'); return window.docx; }
+const fileSafe = s => String(s || 'archivo').replace(/[\\/:*?"<>|#%]+/g, '').replace(/\s+/g, ' ').trim().slice(0, 60) || 'archivo';
+const extOf = b => (b?.type || '').includes('png') ? 'png' : (b?.type || '').includes('webp') ? 'webp' : (b?.type || '').includes('gif') ? 'gif' : 'jpg';
+/* imagen lista para Word (JPEG, máx 520px) */
+async function docImage(m, id, maxW = 520, maxH = 620) {
+  const b = await getImageBlob(m, id); if (!b) return null;
+  let bmp; try { bmp = await createImageBitmap(b); } catch (e) { return null; }
+  const k = Math.min(1, maxW / bmp.width, maxH / bmp.height); const w = Math.max(1, Math.round(bmp.width * k)), h = Math.max(1, Math.round(bmp.height * k));
+  const c = document.createElement('canvas'); c.width = w * 2 > bmp.width ? bmp.width : w * 2; c.height = Math.round(c.width * bmp.height / bmp.width);
+  const x = c.getContext('2d'); x.fillStyle = '#ffffff'; x.fillRect(0, 0, c.width, c.height); x.drawImage(bmp, 0, 0, c.width, c.height);
+  const jb = await new Promise(r => c.toBlob(r, 'image/jpeg', 0.85));
+  return { data: await jb.arrayBuffer(), w, h };
+}
+/* ---------- piezas del documento ---------- */
+function D() {
+  const X = window.docx;
+  const P = (text, o = {}) => new X.Paragraph({ spacing: { after: 120 }, ...o, children: [new X.TextRun({ text: String(text ?? ''), ...(o.run || {}) })] });
+  const lines = (text, o) => String(text ?? '').split('\n').map(t => P(t, o));
+  const H = (text, level = 1) => new X.Paragraph({ heading: [X.HeadingLevel.HEADING_1, X.HeadingLevel.HEADING_1, X.HeadingLevel.HEADING_2, X.HeadingLevel.HEADING_3][level], spacing: { before: level === 1 ? 360 : 220, after: 120 }, children: [new X.TextRun({ text: String(text), color: level === 1 ? '6B21A8' : '3B0764' })] });
+  const KV = rows => { rows = rows.filter(([, v]) => v !== undefined && v !== null && String(v).trim() !== ''); if (!rows.length) return []; return [new X.Table({ width: { size: 100, type: X.WidthType.PERCENTAGE }, rows: rows.map(([k, v]) => new X.TableRow({ children: [new X.TableCell({ width: { size: 28, type: X.WidthType.PERCENTAGE }, shading: { type: X.ShadingType.CLEAR, fill: 'EFE7FF', color: 'auto' }, children: [new X.Paragraph({ children: [new X.TextRun({ text: String(k), bold: true })] })] }), new X.TableCell({ width: { size: 72, type: X.WidthType.PERCENTAGE }, children: lines(v, { spacing: { after: 40 } }) })] })) }), P('')]; };
+  const IMG = (im, caption) => im ? [new X.Paragraph({ alignment: X.AlignmentType.CENTER, children: [new X.ImageRun({ data: im.data, transformation: { width: im.w, height: im.h } })] }), ...(caption ? [P(caption, { alignment: X.AlignmentType.CENTER, run: { italics: true, size: 18, color: '666666' } })] : [])] : [];
+  const BR = () => new X.Paragraph({ children: [new X.PageBreak()] });
+  return { X, P, lines, H, KV, IMG, BR };
+}
+async function makeDocx(title, children) {
+  const X = await docxLib();
+  const doc = new X.Document({ creator: 'MI MANHWA STUDIO', title, styles: { default: { document: { run: { font: 'Calibri', size: 22 } } } }, sections: [{ properties: {}, children }] });
+  return X.Packer.toBlob(doc);
+}
+const nameOf = (m, id) => findEntity(m, id)?.name || '?';
+async function charBlocks(m, c, { images = true, level = 2 } = {}) {
+  const { P, H, KV, IMG } = D(); const out = [H(c.name + (c.nickname ? ` “${c.nickname}”` : ''), level)];
+  if (images && (c.imageId || c.sheet?.front)) out.push(...IMG(await docImage(m, c.imageId || c.sheet.front, 300, 380), 'Imagen de referencia'));
+  out.push(...KV([['Edad', c.age], ['Qué hace / rol', c.role], ['Estado', c.status], ['Poder', c.power], ['Debilidad', c.weakness], ['Trauma', c.trauma], ['Objetivo', c.goal], ['Apariencia', c.appearance], ['Evolución', c.evolution],
+    ['Relaciones', (c.relations || []).map(r => `${r.kind} de ${nameOf(m, r.target)}${r.note ? ' (' + r.note + ')' : ''}`).join('\n')], ['Notas', c.notes]]));
+  if (c.trigger || c.loraId || c.visualPrompt) { out.push(P('LoRA y look', { run: { bold: true, color: '6B21A8' } })); out.push(...KV([['Trigger word', c.trigger], ['LoRA ID / URL', c.loraId], ['Peso LoRA', c.loraWeight], ['Versión LoRA', c.loraVersion ? 'v' + c.loraVersion : ''], ['Prompt del look', c.visualPrompt], ['Semilla del look', c.visualSeed]])); }
+  if (images && c.sheet && Object.values(c.sheet).some(Boolean)) {
+    out.push(P('Hoja de modelo', { run: { bold: true, color: '6B21A8' } }));
+    for (const [k, l] of SHEET_SLOTS) if (c.sheet[k]) out.push(...IMG(await docImage(m, c.sheet[k], 200, 260), l));
+  }
+  const canon = m.canon.filter(f => norm(f.entity) === norm(c.name)); if (canon.length) { out.push(P('Fichas canon', { run: { bold: true, color: '6B21A8' } })); out.push(...canon.map(f => P(`• ${f.attribute}: ${f.value}${f.since ? ' (desde Cap ' + f.since + ')' : ''}`))); }
+  if ((c.history || []).length) { out.push(P('Cambios', { run: { bold: true, color: '6B21A8' } })); out.push(...c.history.map(h => P(`• ${fmtDate(h.at)} — ${h.change}`))); }
+  return out;
+}
+async function entBlocks(m, t, e, { images = true, level = 2 } = {}) {
+  if (t === 'personajes') return charBlocks(m, e, { images, level });
+  const { H, KV, IMG } = D(); const T = TYPES[t]; const out = [H(e.name, level)];
+  if (images && e.imageId) out.push(...IMG(await docImage(m, e.imageId, 420, 300)));
+  out.push(...KV([...T.fields.filter(([k]) => k !== 'name').map(([k, l]) => [l, e[k]]), ['Conexiones', (e.relations || []).map(r => `${r.kind} → ${nameOf(m, r.target)}`).join('\n')]]));
+  return out;
+}
+async function sectionBlocks(m, t, { images = true } = {}) {
+  const { H, P } = D(); const T = TYPES[t]; let arr = [...(m[T.key] || [])];
+  if (t === 'historia') arr.sort((a, b) => (a.order || 0) - (b.order || 0)); else arr.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+  const out = [H(`${T.label}`, 1)]; if (!arr.length) out.push(P('(vacío)'));
+  for (const e of arr) out.push(...await entBlocks(m, t, e, { images }));
+  return out;
+}
+function canonBlocks(m) { const { H, KV } = D(); const out = [H('Fichas canon', 1)]; const by = {}; m.canon.forEach(f => (by[f.entity || '—'] ||= []).push(f)); for (const [ent, fs] of Object.entries(by)) { out.push(H(ent, 3)); out.push(...KV(fs.map(f => [f.attribute || '—', `${f.value}${f.since ? '  (desde Cap ' + f.since + ')' : ''}${f.note ? '  — ' + f.note : ''}`]))); } return out; }
+function bibleBlocks(m) { const { H, KV } = D(); const b = m.bible; return [H('Historia', 1), ...KV([['Género', b.genre], ['Tono', b.tone], ['Sinopsis', b.synopsis], ['Trama completa', b.plot], ['Reglas del mundo', b.rules], ['Protagonista', b.protagonistId ? nameOf(m, b.protagonistId) : '']]), H('Estilo de imágenes', 2), ...KV([['Modelo', b.style.model], ['Pasos', b.style.steps], ['CFG', b.style.cfg], ['Tamaño', `${b.style.width}×${b.style.height}`], ['Prompt de estilo', b.style.prefix], ['Prompt negativo', b.style.negative]])]; }
+async function chapterBlocks(m, c, { script = true, images = false } = {}) {
+  const { H, P, KV, IMG } = D(); const out = [H(`Capítulo ${c.number}${c.title ? ': ' + c.title : ''}`, 1), ...KV([['Estado', c.status], ['Premisa', c.premise], ['Resumen', c.summary]])];
+  if (script && c.panels?.length) {
+    out.push(H('Guion', 2));
+    for (const [i, p] of c.panels.entries()) {
+      out.push(P(`Panel ${i + 1}  ·  ${SIZES[p.size] || p.size}${p.shot ? '  ·  ' + p.shot : ''}`, { run: { bold: true, color: '6B21A8' } }));
+      if (images && p.imageId) out.push(...IMG(await docImage(m, p.imageId, 300, 380)));
+      if (p.description) out.push(P(p.description));
+      if (p.characters?.length) out.push(P('Personajes: ' + p.characters.join(', '), { run: { italics: true, color: '555555' } }));
+      for (const d of p.dialogues || []) out.push(P(`${d.who || '—'}${d.type && d.type !== 'normal' ? ' (' + (DTYPES[d.type] || d.type).toLowerCase() + ')' : ''}: ${d.text}${d.en ? '\n   EN: ' + d.en : ''}${d.ko ? '\n   KO: ' + d.ko : ''}`));
+      if (p.sfx?.length) out.push(P('SFX: ' + p.sfx.join(', '), { run: { bold: true } }));
+    }
+    const ch = c.cliffhangers?.[c.chosenCliff]; if (ch) out.push(H('Final elegido', 3), P(`${ch.title}: ${ch.description}`));
+  }
+  if (c.novel) { out.push(H('Versión novela', 2)); out.push(...c.novel.split(/\n+/).map(t => P(t))); }
+  return out;
+}
+function lorasBlocks(m) {
+  const { H, P, KV } = D(); const cs = m.characters.filter(c => c.loraId || c.trigger || c.visualPrompt || (c.savedImages || []).length);
+  const out = [H('LoRAs y looks de personajes', 1)]; if (!cs.length) out.push(P('Aún no hay LoRAs ni looks guardados.'));
+  for (const c of cs) { out.push(H(c.name, 2)); out.push(...KV([['Trigger word', c.trigger], ['LoRA ID / URL', c.loraId], ['Peso', c.loraWeight], ['Versión', c.loraVersion ? 'v' + c.loraVersion : ''], ['Entrenamiento', c.training ? `${c.training.status}${c.training.n ? ' · ' + c.training.n + ' imágenes' : ''}` : ''], ['Prompt del look', c.visualPrompt], ['Semilla del look', c.visualSeed], ['Configuración', c.visualSettings ? JSON.stringify(c.visualSettings) : ''], ['Semillas favoritas', (c.savedImages || []).map(s => `seed ${s.seed}`).join(', ')]])); }
+  return out;
+}
+function coverBlocks(m, title) { const { X, P } = D(); return [new X.Paragraph({ alignment: X.AlignmentType.CENTER, spacing: { before: 2400, after: 240 }, children: [new X.TextRun({ text: m.name, bold: true, size: 64, color: '6B21A8' })] }), P(title, { alignment: X.AlignmentType.CENTER, run: { size: 32 } }), P(`Actualizado: ${new Date().toLocaleString('es-MX')}`, { alignment: X.AlignmentType.CENTER, run: { color: '777777' } }), P('Hecho con MI MANHWA STUDIO', { alignment: X.AlignmentType.CENTER, run: { color: '999999', size: 18 } })]; }
+async function fullBibleBlob(m, { images = true } = {}) {
+  await docxLib(); const { BR } = D();
+  const ch = [...coverBlocks(m, 'Biblia del manhwa'), BR(), ...bibleBlocks(m)];
+  for (const t of Object.keys(TYPES)) { ch.push(BR(), ...await sectionBlocks(m, t, { images })); }
+  ch.push(BR(), ...canonBlocks(m), BR(), ...lorasBlocks(m));
+  const caps = chapterList(m); if (caps.length) { const { H, KV } = D(); ch.push(BR(), H('Capítulos', 1), ...KV(caps.map(c => [`Cap ${c.number}`, `${c.title || ''} — ${c.status}\n${c.summary || c.premise || ''}`]))); }
+  return makeDocx(`Biblia - ${m.name}`, ch);
+}
+/* ---------- acciones: generales ---------- */
+ACT.dlBible = async el => { const m = cur(); await busy(el, async () => { const b = await fullBibleBlob(m); downloadBlob(b, `Biblia - ${fileSafe(m.name)}.docx`); toast('Biblia descargada en Word ✔', 'ok'); }, 'Creando Word…'); };
+ACT.dlAll = async el => {
+  const m = cur();
+  const vids = Object.values(m.media || {}).filter(x => x.type === 'video'); const vsize = vids.reduce((a, x) => a + (x.size || 0), 0);
+  if (vsize > 300e6 && !await confirmBox(`Tus videos pesan ${(vsize / 1e6).toFixed(0)} MB. El paquete va a ser grande y puede tardar. ¿Continuar?`, { ok: 'Descargar todo', danger: false })) return;
+  await busy(el, async () => {
+    const z = new JSZip(); const used = new Set(); let n = 0;
+    const put = async (path, id) => { const b = await getImageBlob(m, id); if (!b) return; z.file(`${path}.${extOf(b)}`, b, { binary: true }); used.add(id); n++; if (n % 5 === 0) el.innerHTML = `<span class="spin"></span> ${n} archivos…`; };
+    el.innerHTML = '<span class="spin"></span> Creando Word…'; z.file(`Biblia - ${fileSafe(m.name)}.docx`, await fullBibleBlob(m));
+    for (const c of m.characters) { const base = `imagenes/personajes/${fileSafe(c.name)}`; if (c.imageId) await put(`${base}/referencia`, c.imageId); for (const [k, l] of SHEET_SLOTS) if (c.sheet?.[k]) await put(`${base}/hoja-${fileSafe(l)}`, c.sheet[k]); for (const [i, s] of (c.savedImages || []).entries()) if (!used.has(s.imgId)) await put(`${base}/favorita-${i + 1}-seed-${s.seed}`, s.imgId); }
+    for (const p of m.places) if (p.imageId) await put(`imagenes/lugares/${fileSafe(p.name)}`, p.imageId);
+    for (const c of chapterList(m)) { const base = `imagenes/capitulos/Cap ${c.number}`; for (const [i, p] of (c.panels || []).entries()) if (p.imageId && !used.has(p.imageId)) await put(`${base}/panel-${String(i + 1).padStart(2, '0')}`, p.imageId); for (const [i, it] of (c.layout?.items || []).entries()) if (it.imgId && !used.has(it.imgId)) await put(`${base}/editor-${String(i + 1).padStart(2, '0')}`, it.imgId); }
+    if (m.covers?.img && !used.has(m.covers.img)) await put('imagenes/portada', m.covers.img);
+    for (const s of Object.values(m.images || {})) if (s.sticker && !used.has(s.id)) await put(`imagenes/stickers/${fileSafe(s.name || 'sticker')}-${s.id.slice(-5)}`, s.id);
+    for (const s of Object.values(m.images || {})) if (!used.has(s.id)) await put(`imagenes/galeria/${s.id.slice(-8)}${s.seed != null ? '-seed-' + s.seed : ''}`, s.id);
+    for (const v of m.videos || []) { const base = `videos/${fileSafe(v.name)}`; z.file(`${base}/proyecto.json`, JSON.stringify(v, null, 1)); for (const id of new Set(v.clips.map(c => c.media).filter(Boolean))) { const md = m.media?.[id]; if (!md || md.img) continue; const b = await mediaBlob(m, id); if (b) { z.file(`${base}/${fileSafe(md.name)}-${id.slice(-5)}.${(b.type.split('/')[1] || 'bin').split(';')[0]}`, b, { binary: true }); n++; } } }
+    for (const md of Object.values(m.media || {})) { if (md.img) continue; const inV = (m.videos || []).some(v => v.clips.some(c => c.media === md.id)); if (inV) continue; const b = await mediaBlob(m, md.id); if (b) z.file(`videos/biblioteca/${fileSafe(md.name)}-${md.id.slice(-5)}.${(b.type.split('/')[1] || 'bin').split(';')[0]}`, b, { binary: true }); }
+    for (const a of Object.values(m.audios || {})) { const b = await hdBlob(m, a); if (b) z.file(`audios/${fileSafe(a.label)}.${a.ext}`, b, { binary: true }); }
+    const links = []; for (const c of m.characters.filter(x => x.loraId)) { el.innerHTML = `<span class="spin"></span> LoRA de ${esc(c.name)}…`; const b = await fetchLora(c.loraId); if (b) z.file(`loras/${fileSafe(c.name)}${c.loraVersion ? '-v' + c.loraVersion : ''}.safetensors`, b, { binary: true }); else links.push(`${c.name}: ${c.loraId}`); }
+    z.file('loras/LEEME.txt', ['LoRAs de ' + m.name, '', ...m.characters.filter(c => c.loraId || c.trigger).map(c => `${c.name}\n  trigger: ${c.trigger || '-'}\n  LoRA: ${c.loraId || '-'}\n  peso: ${c.loraWeight ?? '-'}\n  versión: ${c.loraVersion ? 'v' + c.loraVersion : '-'}\n`), ...(links.length ? ['', 'No se pudieron descargar automáticamente (descárgalos desde el enlace):', ...links] : [])].join('\n'));
+    z.file('datos/manhwa.json', JSON.stringify(m, null, 1));
+    el.innerHTML = '<span class="spin"></span> Comprimiendo…';
+    const blob = await z.generateAsync({ type: 'blob', compression: 'STORE' });
+    downloadBlob(blob, `${fileSafe(m.name)} - TODO.zip`);
+    toast(`Paquete listo (${(blob.size / 1e6).toFixed(1)} MB): Word, ${n} archivos, audios y LoRAs ✔`, 'ok');
+  }, 'Preparando…');
+};
+async function fetchLora(url) { if (!/^https?:\/\//.test(url || '')) return null; try { const r = await fetch(url); if (!r.ok) return null; return await r.blob(); } catch (e) { return null; } }
+/* ---------- acciones: cada cosa por separado ---------- */
+ACT.dlEntity = async el => { const m = cur(); const t = el.dataset.t; const e = (m[TYPES[t].key] || []).find(x => x.id === el.dataset.id); await busy(el, async () => { await docxLib(); const b = await makeDocx(e.name, [...coverBlocks(m, `${TYPES[t].one[0].toUpperCase() + TYPES[t].one.slice(1)}: ${e.name}`), ...await entBlocks(m, t, e, { level: 1 })]); downloadBlob(b, `${fileSafe(e.name)} - ${TYPES[t].one}.docx`); }, 'Creando…'); };
+ACT.dlSection = async el => { const m = cur(); const t = el.dataset.t; await busy(el, async () => { await docxLib(); const b = await makeDocx(TYPES[t].label, [...coverBlocks(m, TYPES[t].label), ...await sectionBlocks(m, t)]); downloadBlob(b, `${fileSafe(m.name)} - ${TYPES[t].label}.docx`); }, 'Creando…'); };
+ACT.dlCanon = async el => { const m = cur(); await busy(el, async () => { await docxLib(); downloadBlob(await makeDocx('Fichas canon', [...coverBlocks(m, 'Fichas canon'), ...canonBlocks(m)]), `${fileSafe(m.name)} - Fichas canon.docx`); }, 'Creando…'); };
+ACT.dlBibleOnly = async el => { const m = cur(); await busy(el, async () => { await docxLib(); downloadBlob(await makeDocx('Historia', [...coverBlocks(m, 'Historia y estilo'), ...bibleBlocks(m)]), `${fileSafe(m.name)} - Historia.docx`); }, 'Creando…'); };
+ACT.dlChapter = async el => { const m = cur(); const c = chapterById(m, el.dataset.id); const withImg = el.dataset.img === '1'; await busy(el, async () => { await docxLib(); downloadBlob(await makeDocx(`Cap ${c.number}`, await chapterBlocks(m, c, { script: true, images: withImg })), `${fileSafe(m.name)} - Cap ${c.number}${c.title ? ' ' + fileSafe(c.title) : ''}.docx`); }, 'Creando…'); };
+ACT.dlChapterImgs = async el => { const m = cur(); const c = chapterById(m, el.dataset.id); await busy(el, async () => { const z = new JSZip(); let n = 0; for (const [i, p] of (c.panels || []).entries()) if (p.imageId) { const b = await getImageBlob(m, p.imageId); if (b) { z.file(`panel-${String(i + 1).padStart(2, '0')}.${extOf(b)}`, b); n++; } } for (const [i, it] of (c.layout?.items || []).entries()) if (it.imgId && !(c.panels || []).some(p => p.imageId === it.imgId)) { const b = await getImageBlob(m, it.imgId); if (b) { z.file(`editor-${String(i + 1).padStart(2, '0')}.${extOf(b)}`, b); n++; } } if (!n) throw new Error('Este capítulo aún no tiene imágenes'); downloadBlob(await z.generateAsync({ type: 'blob' }), `${fileSafe(m.name)} - Cap ${c.number} imágenes.zip`); }, 'Preparando…'); };
+ACT.dlCharImgs = async el => { const m = cur(); const c = m.characters.find(x => x.id === el.dataset.id); await busy(el, async () => { const z = new JSZip(); const seen = new Set(); let n = 0; const add = async (name, id) => { if (!id || seen.has(id)) return; seen.add(id); const b = await getImageBlob(m, id); if (b) { z.file(`${name}.${extOf(b)}`, b); n++; } }; await add('referencia', c.imageId); for (const [k, l] of SHEET_SLOTS) await add('hoja-' + fileSafe(l), c.sheet?.[k]); for (const [i, s] of (c.savedImages || []).entries()) await add(`favorita-${i + 1}-seed-${s.seed}`, s.imgId); for (const [i, r] of (c.lab?.rounds || []).entries()) for (const [j, id] of r.imgs.entries()) await add(`laboratorio-ronda${i + 1}-${j + 1}`, id); if (!n) throw new Error('Este personaje aún no tiene imágenes'); downloadBlob(await z.generateAsync({ type: 'blob' }), `${fileSafe(c.name)} - imágenes.zip`); }, 'Preparando…'); };
+ACT.dlLora = async el => { const m = cur(); const c = m.characters.find(x => x.id === el.dataset.id); if (!c?.loraId) return toast('Este personaje aún no tiene LoRA', 'err'); await busy(el, async () => { const b = await fetchLora(c.loraId); if (b) { downloadBlob(b, `${fileSafe(c.name)}${c.loraVersion ? '-v' + c.loraVersion : ''}.safetensors`); toast('LoRA descargado ✔', 'ok'); } else { window.open(c.loraId, '_blank', 'noopener'); toast('Abrí el enlace del LoRA en otra pestaña para descargarlo'); } }, 'Descargando…'); };
+ACT.dlLoras = async el => { const m = cur(); await busy(el, async () => { await docxLib(); downloadBlob(await makeDocx('LoRAs', [...coverBlocks(m, 'LoRAs y looks'), ...lorasBlocks(m)]), `${fileSafe(m.name)} - LoRAs.docx`); }, 'Creando…'); };
+ACT.dlImg = async (el, e) => { e?.stopPropagation?.(); const m = cur(); const id = el.dataset.id; const meta = m.images[id]; const b = await getImageBlob(m, id); if (!b) return toast('No encontré la imagen', 'err'); downloadBlob(b, `${fileSafe(m.name)}-${meta?.sticker ? 'sticker' : 'imagen'}-${id.slice(-6)}${meta?.seed != null ? '-seed-' + meta.seed : ''}.${extOf(b)}`); };
+ACT.dlVideoFiles = async el => { const m = cur(); const v = vById(m, el.dataset.id); await busy(el, async () => { const z = new JSZip(); z.file('proyecto.json', JSON.stringify(v, null, 1)); let n = 0; for (const id of new Set(v.clips.map(c => c.media).filter(Boolean))) { const md = m.media?.[id]; const b = md?.img || m.images?.[id] ? await getImageBlob(m, id) : await mediaBlob(m, id); if (b) { z.file(`${fileSafe(md?.name || 'archivo')}-${id.slice(-5)}.${(b.type.split('/')[1] || 'bin').split(';')[0]}`, b, { binary: true }); n++; } } downloadBlob(await z.generateAsync({ type: 'blob', compression: 'STORE' }), `${fileSafe(v.name)} - archivos.zip`); toast(`${n} archivos del video descargados (para el video final usa Exportar)`, 'ok'); }, 'Preparando…'); };
+ACT.dlClipMedia = async () => { const m = cur(); const v = vById(m, Route.a); const c = v?.clips.find(x => x.id === VED.sel); if (!c?.media) return toast('Este clip no tiene archivo (está hecho con código)', 'err'); const md = m.media?.[c.media]; const b = md?.img || m.images?.[c.media] ? await getImageBlob(m, c.media) : await mediaBlob(m, c.media); if (!b) return toast('No encontré el archivo', 'err'); downloadBlob(b, `${fileSafe(md?.name || c.name || 'archivo')}.${(b.type.split('/')[1] || 'bin').split(';')[0]}`); };
 
 </script>
 </body>
