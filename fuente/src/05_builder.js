@@ -518,7 +518,7 @@ VIEWS.portada = () => {
   const prota = m.characters.find(c => c.id === m.bible.protagonistId) || m.characters[0];
   const imgs = Object.values(m.images || {}).sort((a, b) => b.createdAt - a.createdAt).slice(0, 40);
   return `<div class="head"><div><h1>🖼️ Generador de Portada</h1><p class="muted">Versión con título y sin título (para miniatura). Cuadrada 1080×1080 y vertical 1080×1920.</p></div>
-    <div class="row"><button class="pri big" data-a="coverGen">⚡ 1 CLIC: ${prota ? esc(prota.name) + ' en pose épica' : 'portada épica'} (Fal.ai)</button><button class="big" data-a="coverDl">⬇️ Descargar las 4</button></div></div>
+    <div class="row"><button class="pri big" data-a="coverGen">⚡ 1 CLIC: ${prota ? esc(prota.name) + ' en pose épica' : 'portada épica'}${typeof wkOn === 'function' && wkOn() ? ` · ${loraKind(prota) === 'klein' ? '👷 ' + mx(0.012) : '🎨 2K ' + mx(0.10)}` : ' (Fal.ai)'}</button>${typeof wkOn === 'function' && wkOn() ? `<button class="big" data-a="coverGen" data-titled="1">🔤 Portada con título (${mx(0.04)})</button>` : ''}<button class="big" data-a="coverDl">⬇️ Descargar las 4</button></div></div>
     <div class="covergrid">
       <div class="covers" id="covers"><div><canvas id="cv0"></canvas><div class="tiny muted">Cuadrada · con título</div></div><div><canvas id="cv1"></canvas><div class="tiny muted">Cuadrada · sin título</div></div><div><canvas id="cv2"></canvas><div class="tiny muted">Vertical · con título</div></div><div><canvas id="cv3"></canvas><div class="tiny muted">Vertical · sin título</div></div></div>
       <div class="panelbox">

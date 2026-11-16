@@ -350,7 +350,7 @@ ACT.hdMake = async el => {
       pcm.push(data); total += dur;
       const gap = new Float32Array(Math.round(RATE * 0.35)); pcm.push(gap); total += gap.length / RATE;
     }
-    addSpend(costTTS(chars));
+    addSpend(costTTS(chars)); if (typeof addFalSpend === 'function') addFalSpend(costTTS(chars), m);
     const all = new Float32Array(pcm.reduce((a, x) => a + x.length, 0)); let o = 0; pcm.forEach(x => { all.set(x, o); o += x.length; });
     let blob, ext;
     if (window.lamejs) { prog('Comprimiendo a MP3…'); blob = await encodeMp3(all, RATE, f => prog(`Comprimiendo a MP3… ${Math.round(f * 100)}%`)); ext = 'mp3'; }

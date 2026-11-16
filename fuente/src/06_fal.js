@@ -9,7 +9,9 @@ const SHEET_SLOTS = [['front', 'Frente', 'full body, front view, standing, neutr
 const randSeed = () => Math.floor(Math.random() * 2147483000);
 function imgLine(n, w, h, label) { const mp = Math.max(1, Math.ceil(w * h / 1e6)); const app = S.settings.falApp || 'fal-ai/flux-lora'; return { label: label || `${plural(n, 'imagen', 'imágenes')} ${w}×${h} en Fal.ai`, cost: costImages(n, w, h), note: `${money(falUnit(app))} por megapíxel · ${mp} MP c/u${app === 'fal-ai/lora' ? ' · precio aproximado para Pony/SDXL' : ''}` }; }
 
-function falRequest(m, { prompt, negative = '', loras = [], width, height, seed, steps, cfg }) {
+function falRequest(m, o) {
+  if (o.worker) return workerReq(o.worker, o);
+  let { prompt, negative = '', loras = [], width, height, seed, steps, cfg } = o;
   const app = S.settings.falApp || 'fal-ai/flux-lora';
   const st = m.bible.style;
   width = Math.round((width || st.width || 800) / 8) * 8; height = Math.round((height || st.height || 1200) / 8) * 8;
@@ -23,31 +25,40 @@ function falRequest(m, { prompt, negative = '', loras = [], width, height, seed,
 /* genera N imágenes con semillas propias (para poder repetir cualquiera) */
 async function falGenerate(m, opts, n = 1, meta = {}, { confirmed = false, title = 'Generar imágenes en Fal.ai' } = {}) {
   const st0 = m.bible.style; const W0 = opts.width || st0.width || 800, H0 = opts.height || st0.height || 1200;
-  if (!confirmed && !await confirmCost(title, [imgLine(n, W0, H0)])) throw new Error('Cancelado');
+  const k = opts.worker || null; const one = k ? wkCost(k, 1, opts) : costImages(1, W0, H0);
+  if (!confirmed && !(k ? await confirmWorker(k, n, { res: opts.res, noun: opts.noun ? plural(n, ...opts.noun) : null }) : await confirmCost(title, [imgLine(n, W0, H0)]))) throw new Error('Cancelado');
   const seeds = Array.from({ length: n }, (_, i) => opts.seed != null ? opts.seed + i : randSeed());
   const runs = seeds.map(async seed => {
     const req = falRequest(m, { ...opts, seed });
     const r = await callFn('falRun', { app: req.app, input: req.input, manhwaId: m.id });
     const im = r.images?.[0]; if (!im) throw new Error('Fal.ai no devolvió imagen');
     if (r.has_nsfw_concepts?.[0]) toast('Fal.ai marcó una imagen como sensible y puede venir en negro.', 'err');
-    const settings = { app: req.app, width: req.input.image_size.width, height: req.input.image_size.height, steps: req.input.num_inference_steps, cfg: req.input.guidance_scale, loras: req.input.loras, model: req.input.model_name || null };
-    return addRemoteImage(m, im, { seed: r.seed ?? seed, prompt: opts.prompt, negative: opts.negative || '', settings, ...meta });
+    const settings = { app: req.app, worker: k, width: req.input.image_size?.width ?? null, height: req.input.image_size?.height ?? null, resolution: req.input.resolution || (k ? '1k' : null), aspect: req.input.aspect_ratio || null, steps: req.input.num_inference_steps, cfg: req.input.guidance_scale, loras: req.input.loras, model: req.input.model_name || null };
+    return addRemoteImage(m, im, { seed: r.seed ?? (k === 'artista' ? null : seed), prompt: opts.prompt, negative: opts.negative || '', settings, ...meta });
   });
   const res = await Promise.allSettled(runs);
   const ok = res.filter(x => x.status === 'fulfilled').map(x => x.value);
   const bad = res.find(x => x.status === 'rejected');
-  if (ok.length) addSpend(costImages(ok.length, W0, H0));
+  if (ok.length) { addSpend(one * ok.length); addFalSpend(one * ok.length, m, meta.chapter); }
+  if (ok.length && !opts.quiet) afterSpend(m, one * ok.length, { chapterId: meta.chapter });
   if (!ok.length && bad) throw bad.reason;
   if (bad) toast('Una imagen falló: ' + bad.reason.message, 'err');
   return ok;
 }
 
+/* el panel con su trabajador: El Obrero (1K) y solo los LoRAs que entiende */
+function panelReq(m, p) {
+  const P = buildPanelPrompt(m, p); if (!wkOn()) return P;
+  const { k, loras } = wkForPanel(m, p); return { ...P, loras, worker: k };
+}
+/* trabajador para un personaje: si ya aprendió con El Maestro → El Obrero; si no → El Artista */
+function charWorker(ch, fallback = 'artista') { if (!wkOn()) return null; const kd = loraKind(ch); return kd === 'klein' ? 'obrero' : kd === 'clasico' ? 'obreroClasico' : fallback; }
 /* ---------------- Paneles del capítulo ---------------- */
 ACT.genPanel = async el => {
   const m = cur(); const c = chapterById(m, Route.a); const p = c.panels[+el.dataset.i];
   await busy(el, async () => {
-    const P = buildPanelPrompt(m, p);
-    const [id] = await falGenerate(m, P, 1, { panel: p.id, chapter: c.id }, { title: `Generar panel #${+el.dataset.i + 1}` });
+    const P = panelReq(m, p);
+    const [id] = await falGenerate(m, { ...P, noun: ['panel', 'paneles'] }, 1, { panel: p.id, chapter: c.id }, { title: `Generar panel #${+el.dataset.i + 1}` });
     p.approved = true; p.imageId = id; p.seed = m.images[id].seed; touch(m); render(); toast(`Panel #${+el.dataset.i + 1} generado`, 'ok');
   }, 'Generando…');
 };
@@ -57,22 +68,31 @@ ACT.genChapter = async el => {
   if (!approved.length) return toast('Primero aprueba los paneles que quieres mandar a Fal.ai (✔ Aprobar en cada panel, o “Aprobar todos”).', 'err');
   let todo = approved.filter(x => !x.p.imageId);
   if (!todo.length) { if (!await confirmBox('Todos los paneles aprobados ya tienen imagen. ¿Generarlos de nuevo? (las anteriores quedan en la Galería)', { ok: 'Regenerar aprobados', danger: false })) return; todo = approved; }
-  const lines = []; const groups = {};
-  todo.forEach(({ p }) => { const P = buildPanelPrompt(m, p); const k = P.width + '×' + P.height; (groups[k] ||= { n: 0, w: P.width, h: P.height }).n++; });
-  Object.values(groups).forEach(g => lines.push(imgLine(g.n, g.w, g.h, `${plural(g.n, 'panel', 'paneles')} de ${g.w}×${g.h}`)));
   const pending = c.panels.length - approved.length;
-  if (!await confirmCost(`Generar ${plural(todo.length, 'panel', 'paneles')} en Fal.ai`, lines, { extra: pending ? `${plural(pending, 'panel', 'paneles')} sin aprobar no se mandarán.` : '' })) return;
+  if (wkOn()) {
+    const by = {}; todo.forEach(({ p }) => { const k = panelReq(m, p).worker; by[k] = (by[k] || 0) + 1; });
+    const ks = Object.keys(by); const extra = [pending ? `${plural(pending, 'panel', 'paneles')} sin aprobar no se mandarán.` : '', ks.length > 1 ? ks.map(k => `${WK[k].icon} ${WK[k].name}: ${plural(by[k], 'panel', 'paneles')} (${mx(wkCost(k, by[k]))})`).join('<br>') : '', by.obreroClasico ? 'Algunos personajes los aprendió El Maestro Clásico, por eso los dibuja El Obrero Clásico (cuesta más).' : ''].filter(Boolean).join('<br>');
+    if (ks.length === 1) { if (!await confirmWorker(ks[0], todo.length, { noun: plural(todo.length, 'panel', 'paneles'), extra })) return; }
+    else { const total = ks.reduce((a, k) => a + wkCost(k, by[k]), 0); if (!await confirmBox(`Vas a generar ${plural(todo.length, 'panel', 'paneles')} con tus obreros, te va a costar ${mx(total)}. ¿Le doy?<br><span class="small">${extra}</span>`, { ok: `Sí, dale (${mx(total)})`, danger: false, title: '👷 Generar capítulo' })) return; }
+  } else {
+    const lines = []; const groups = {};
+    todo.forEach(({ p }) => { const P = buildPanelPrompt(m, p); const k = P.width + '×' + P.height; (groups[k] ||= { n: 0, w: P.width, h: P.height }).n++; });
+    Object.values(groups).forEach(g => lines.push(imgLine(g.n, g.w, g.h, `${plural(g.n, 'panel', 'paneles')} de ${g.w}×${g.h}`)));
+    if (!await confirmCost(`Generar ${plural(todo.length, 'panel', 'paneles')} en Fal.ai`, lines, { extra: pending ? `${plural(pending, 'panel', 'paneles')} sin aprobar no se mandarán.` : '' })) return;
+  }
+  const spent0 = c.falSpent || 0;
   const prev = c.status; c.status = 'Generando'; touch(m);
   const prog = () => $('#genProg');
   let done = 0, fail = 0; el.disabled = true;
   for (const { p, i } of todo) {
     if (Route.view === 'cap' && prog()) prog().innerHTML = `<div class="small muted">Generando panel ${i + 1}… (${done}/${todo.length})</div><div class="bar"><i style="width:${Math.round(100 * done / todo.length)}%"></i></div>`;
-    try { const [id] = await falGenerate(m, buildPanelPrompt(m, p), 1, { panel: p.id, chapter: c.id }, { confirmed: true }); p.imageId = id; p.seed = m.images[id].seed; done++; touch(m); }
+    try { const [id] = await falGenerate(m, { ...panelReq(m, p), quiet: true }, 1, { panel: p.id, chapter: c.id }, { confirmed: true }); p.imageId = id; p.seed = m.images[id].seed; done++; touch(m); }
     catch (e) { fail++; toast(`Panel ${i + 1}: ${e.message}`, 'err'); if (/API key|Inicia sesión/.test(e.message)) break; }
   }
   c.status = prev === 'Generando' ? 'Borrador' : prev; touch(m);
   if (Route.view === 'cap') render();
   toast(`Listo: ${done} imágenes generadas${fail ? `, ${fail} fallaron` : ''}. Envíalas al armador.`, fail ? '' : 'ok');
+  if ((c.falSpent || 0) > spent0) setTimeout(() => afterSpend(m, c.falSpent - spent0, { chapterId: c.id }), 700);
 };
 
 /* ---------------- Laboratorio de LoRA ---------------- */
@@ -91,7 +111,8 @@ VIEWS.lora = () => {
 
     <div class="sect panelbox"><h2>1 · Describe a tu personaje como quieras</h2>
       <textarea ${bindAttr(lab, 'desc')} placeholder="Quiero mi prota con pelo negro, lunar pequeño bajo el ojo derecho, ojos grises, chaqueta negra…">${esc(lab.desc)}</textarea>
-      <div class="row"><button class="pri big" data-a="labStart">⚡ Generar 4 pruebas</button>${lab.rounds.length ? `<span class="small muted">${plural(lab.rounds.length, 'ronda', 'rondas')}</span>` : ''}</div>
+      ${wkOn() ? `<div class="row small" style="margin:6px 0">¿Quién dibuja? <select id="labWho">${[['artista', '🎨 El Artista Caro (bonito, para crear la cara)'], ['pruebas', '✏️ El de Pruebas (garabatos casi gratis)'], ...(loraKind(ch) === 'klein' ? [['obrero', '👷 El Obrero (ya sabe su cara)']] : [])].map(([v, l]) => `<option value="${v}" ${(S.settings.labWho || (loraKind(ch) === 'klein' ? 'obrero' : 'artista')) === v ? 'selected' : ''}>${l} · ${mx(wkCost(v, 1))} c/u</option>`).join('')}</select></div>` : ''}
+      <div class="row"><button class="pri big" data-a="labStart">⚡ Generar 4 pruebas</button>${wkOn() ? `<button data-a="labTwenty">🎨 20 fotos para El Maestro (${mx(wkCost('artista', 20))})</button>` : ''}${lab.rounds.length ? `<span class="small muted">${plural(lab.rounds.length, 'ronda', 'rondas')}</span>` : ''}</div>
     </div>
     ${lab.rounds.length ? `<div class="sect panelbox"><h2>2 · Elige y corrige</h2><div class="rounds">${[...lab.rounds].reverse().map((r, ri) => `<div class="round"><div class="small muted">Ronda ${lab.rounds.length - ri}${r.feedback ? ` · tu corrección: “${esc(r.feedback)}”` : ''}</div>${r.notes ? `<div class="tiny dim">IA: ${esc(r.notes)}</div>` : ''}<details><summary class="tiny dim" style="cursor:pointer">ver prompt</summary><div class="prompt">${esc(r.prompt)}</div></details><div class="igrid" style="margin-top:8px">${r.imgs.map(id => imgTile(id, 'lab')).join('')}</div></div>`).join('')}</div>
       <label class="f">¿Qué no te gustó? (dilo normal)<textarea id="labFb" placeholder="No me gustó su lunar, está muy grande. El cabello más largo."></textarea></label>
@@ -105,6 +126,7 @@ VIEWS.lora = () => {
     <div class="sect panelbox"><h2>4 · ENTRENAR MI LORA V2 EN FAL.AI</h2>
       <p class="small muted">Sube 20-30 imágenes corregidas del personaje (variedad de ángulos, luz y ropa). Las mando a entrenar y actualizo el LoRA ID solo cuando termine.</p>
       <div class="grid2"><label class="f">Trigger word<input ${bindAttr(ch, 'trigger')} value="${esc(ch.trigger || '')}" placeholder="ej. kaelmh"></label><label class="f">Pasos de entrenamiento<input type="number" id="trSteps" value="${S.settings.trainSteps || 1000}"></label></div>
+      ${wkOn() ? `<label class="f">¿Qué maestro le enseña?<select id="trWho"><option value="maestro" ${(S.settings.trWho || 'maestro') === 'maestro' ? 'selected' : ''}>🧑‍🏫 EL MAESTRO · ${mx(4.30)} una vez · luego El Obrero dibuja a ${mx(0.012)} el panel (recomendado)</option><option value="maestroClasico" ${S.settings.trWho === 'maestroClasico' ? 'selected' : ''}>🧑‍🏫 EL MAESTRO CLÁSICO · ${mx(2)} una vez · luego cada panel cuesta ${mx(0.035)}</option></select></label>` : ''}
       ${tr ? `<div class="alert ${tr.status === 'COMPLETED' ? 'ok' : tr.status === 'FAILED' ? 'bad' : 'info'}">${tr.status === 'COMPLETED' ? `✔ Entrenamiento terminado (${fmtDate(tr.doneAt)}). LoRA v${ch.loraVersion || 1} activo.` : tr.status === 'FAILED' ? '✕ Falló: ' + esc(tr.error || '') : `⏳ Entrenando (${esc(tr.status)})${tr.queue != null ? ' · en cola: ' + tr.queue : ''} · empezó ${fmtDate(tr.startedAt)}. Puedes cerrar la app; reviso al volver.`}</div>` : ''}
       <div class="row"><button class="pri" data-a="trainPick">📤 Subir 20-30 imágenes y entrenar</button><button data-a="trainFav">♥ Usar favoritas + hoja de modelo</button>${tr && !['COMPLETED', 'FAILED'].includes(tr.status) ? '<button data-a="trainCheck">🔄 Revisar estado</button>' : ''}</div>
       <div class="grid2"><label class="f">LoRA ID / URL actual<input ${bindAttr(ch, 'loraId')} value="${esc(ch.loraId || '')}"></label><label class="f">Peso LoRA<input type="number" step="0.05" ${bindAttr(ch, 'loraWeight', { num: 1 })} value="${ch.loraWeight ?? 0.9}"></label></div>
@@ -133,18 +155,37 @@ Formato: {"prompt":"…","notes":"qué cambiaste, en español, 1 frase"}`, { max
 async function labRun(el, feedback) {
   const m = cur(); const ch = labChar(); const lab = ch.lab;
   if (!lab.desc.trim()) return toast('Describe primero a tu personaje', 'err');
-  if (!await confirmCost(feedback ? 'Corregir y generar 4 nuevas' : 'Generar 4 pruebas', [aiLine(2500, 300, 800, 'Convertir tu descripción en prompt'), imgLine(4, 768, 1024)])) return;
+  const who = wkOn() ? ($('#labWho')?.value || 'artista') : null; if (who) { S.settings.labWho = who; saveSettings(); }
+  if (who ? !await confirmWorker(who, 4, { extra: isPremium() ? '' : 'Además Claude convierte tu descripción en instrucciones (cuesta centavos).' }) : !await confirmCost(feedback ? 'Corregir y generar 4 nuevas' : 'Generar 4 pruebas', [aiLine(2500, 300, 800, 'Convertir tu descripción en prompt'), imgLine(4, 768, 1024)])) return;
   await busy(el, async () => {
     const last = lab.rounds[lab.rounds.length - 1];
     const p = await labPrompt(m, ch, lab.desc, feedback ? last?.prompt : null, feedback);
     const prompt = [m.bible.style.prefix, p.prompt].filter(Boolean).join(', ');
     const loras = ch.loraId ? [{ path: ch.loraId, scale: Number(ch.loraWeight) || 0.9 }] : [];
-    const ids = await falGenerate(m, { prompt, negative: m.bible.style.negative, loras, width: 768, height: 1024 }, 4, { character: ch.id, lab: true }, { confirmed: true });
+    const ids = await falGenerate(m, { prompt, negative: m.bible.style.negative, loras, width: 768, height: 1024, worker: who }, 4, { character: ch.id, lab: true }, { confirmed: true });
     lab.rounds.push({ id: uid('r_'), prompt, feedback: feedback || '', notes: p.notes || '', imgs: ids, at: Date.now() });
     lab.chosen = null; touch(m); render();
   }, 'Generando 4…');
 }
 ACT.labStart = el => labRun(el, null);
+const TWENTY = ['front view, neutral', 'three-quarter view, smiling', 'side profile', 'looking over shoulder', 'close-up face, determined', 'close-up face, angry', 'close-up face, sad', 'close-up face, surprised', 'full body standing', 'full body walking', 'sitting, relaxed', 'running action pose', 'fighting stance', 'arms crossed', 'looking up', 'looking down', 'laughing', 'night lighting', 'sunset lighting', 'back view looking back'];
+ACT.labTwenty = async el => {
+  const m = cur(); const ch = labChar();
+  const base = ch.visualPrompt || (ch.lab?.rounds?.length ? ch.lab.rounds[ch.lab.rounds.length - 1].prompt : '') || ch.appearance;
+  if (!base) return toast('Primero crea y guarda el look de tu personaje (paso 1 y 2)', 'err');
+  if (!await confirmWorker('artista', 20, { extra: 'Hago 20 fotos de tu personaje en poses y caras distintas, y las marco ♥ para que El Maestro las use al entrenar.' })) return;
+  await busy(el, async () => {
+    let n = 0; const ids = [];
+    for (const pose of TWENTY) {
+      el.innerHTML = `<span class="spin"></span> ${++n}/20`;
+      try { const [id] = await falGenerate(m, { prompt: [m.bible.style.prefix, ch.trigger, base.replace(m.bible.style.prefix + ', ', ''), pose, 'same character, consistent design, plain background'].filter(Boolean).join(', '), width: 768, height: 1024, worker: 'artista', quiet: true }, 1, { character: ch.id, lab: true, train: true }, { confirmed: true }); m.images[id].liked = true; ids.push(id); }
+      catch (e) { toast(e.message, 'err'); if (/API key|sesión|saldo|balance/i.test(e.message)) break; }
+    }
+    ch.savedImages ||= []; ids.forEach(id => { const i = m.images[id]; if (!ch.savedImages.some(s => s.imgId === id)) ch.savedImages.push({ imgId: id, seed: i.seed, prompt: i.prompt, settings: i.settings }); });
+    touch(m); render(); toast(`Listo: ${ids.length} fotos marcadas ♥. Ahora en el paso del Maestro toca “Usar favoritas”.`, 'ok');
+    afterSpend(m, wkCost('artista', ids.length), { label: 'en las fotos de ' + ch.name });
+  }, 'Generando…');
+};
 ACT.labFix = el => { const fb = $('#labFb').value.trim(); if (!fb) return toast('Escribe qué quieres corregir', 'err'); labRun(el, fb); };
 ACT.labPick = (el, e) => { if (e?.target.closest('.heart')) return; const m = cur(); const ch = labChar(); ch.lab.chosen = el.dataset.id; touch(m); render(); };
 ACT.labSave = () => {
@@ -164,7 +205,7 @@ async function sheetGen(m, ch, k, confirmed = false) {
   const base = ch.visualPrompt || ch.appearance || ch.name;
   const loras = ch.loraId ? [{ path: ch.loraId, scale: Number(ch.loraWeight) || 0.9 }] : [];
   const prompt = [m.bible.style.prefix, 'character model sheet', base, slot[2], 'plain light gray background'].filter(Boolean).join(', ');
-  const [id] = await falGenerate(m, { prompt, negative: m.bible.style.negative, loras, width: 768, height: 1024, seed: ch.visualSeed ?? undefined }, 1, { character: ch.id, sheet: k }, { confirmed, title: 'Hoja de modelo: ' + slot[1] });
+  const [id] = await falGenerate(m, { prompt, negative: m.bible.style.negative, loras, width: 768, height: 1024, seed: ch.visualSeed ?? undefined, worker: charWorker(ch), quiet: confirmed }, 1, { character: ch.id, sheet: k }, { confirmed, title: 'Hoja de modelo: ' + slot[1] });
   (ch.sheet ||= {})[k] = id; touch(m);
 }
 ACT.sheetSlot = async el => {
@@ -176,8 +217,9 @@ ACT.sheetSlot = async el => {
 };
 ACT.sheetAll = async el => {
   const m = cur(); const ch = labChar();
-  if (!await confirmCost('Hoja de modelo completa', [imgLine(SHEET_SLOTS.length, 768, 1024, `${SHEET_SLOTS.length} vistas y expresiones (768×1024)`)])) return;
-  await busy(el, async () => { let n = 0; for (const [k] of SHEET_SLOTS) { el.innerHTML = `<span class="spin"></span> ${++n}/${SHEET_SLOTS.length}`; try { await sheetGen(m, ch, k, true); } catch (e) { toast(e.message, 'err'); if (/API key|sesión/.test(e.message)) break; } } render(); toast('Hoja de modelo lista', 'ok'); }, 'Generando…');
+  const sw = charWorker(ch);
+  if (sw ? !await confirmWorker(sw, SHEET_SLOTS.length, { extra: 'Hoja de modelo: vistas de frente, perfil, espalda y 8 expresiones.' }) : !await confirmCost('Hoja de modelo completa', [imgLine(SHEET_SLOTS.length, 768, 1024, `${SHEET_SLOTS.length} vistas y expresiones (768×1024)`)])) return;
+  await busy(el, async () => { let n = 0; for (const [k] of SHEET_SLOTS) { el.innerHTML = `<span class="spin"></span> ${++n}/${SHEET_SLOTS.length}`; try { await sheetGen(m, ch, k, true); } catch (e) { toast(e.message, 'err'); if (/API key|sesión/.test(e.message)) break; } } render(); toast('Hoja de modelo lista', 'ok'); if (sw) afterSpend(m, wkCost(sw, SHEET_SLOTS.length), { label: 'en la hoja de modelo' }); }, 'Generando…');
 };
 
 /* Entrenamiento LoRA v2 */
@@ -186,16 +228,18 @@ async function startTraining(m, ch, blobs) {
   if (blobs.length < 10) throw new Error(`Solo hay ${blobs.length} imágenes. Usa al menos 10 (ideal 20-30).`);
   if (!ch.trigger) ch.trigger = norm(ch.name).replace(/\s/g, '') + 'mh';
   const steps = Number($('#trSteps')?.value) || S.settings.trainSteps || 1000;
-  if (!await confirmCost('Entrenar LoRA en Fal.ai', [{ label: `Entrenamiento de ${ch.name} · ${blobs.length} imágenes · ${steps} pasos`, cost: costTrain(steps), note: `${money(falUnit(S.settings.trainApp || 'fal-ai/flux-lora-fast-training'))} por cada 1000 pasos` }])) throw new Error('Cancelado');
+  const who = wkOn() ? ($('#trWho')?.value || S.settings.trWho || 'maestro') : null; if (who) { S.settings.trWho = who; saveSettings(); }
+  if (who ? !await confirmWorker(who, 1, { steps, extra: `Le enseño a ${esc(ch.name)} con ${blobs.length} fotos. Tarda unos minutos y te aviso cuando termine.${who === 'maestroClasico' ? '<br>⚠️ Lo que enseña El Maestro Clásico no lo entiende El Obrero: sus paneles costarán ' + mx(0.035) + ' cada uno.' : ''}` }) : !await confirmCost('Entrenar LoRA en Fal.ai', [{ label: `Entrenamiento de ${ch.name} · ${blobs.length} imágenes · ${steps} pasos`, cost: costTrain(steps), note: `${money(falUnit(S.settings.trainApp || 'fal-ai/flux-lora-fast-training'))} por cada 1000 pasos` }])) throw new Error('Cancelado');
   const zip = new JSZip(); const cap = `${ch.trigger}, ${ch.visualPrompt || ch.appearance || ch.name}`;
   blobs.forEach((b, i) => { const n = String(i + 1).padStart(3, '0'); zip.file(`${n}.${(b.type || '').includes('png') ? 'png' : 'jpg'}`, b); zip.file(`${n}.txt`, cap); });
   const zb = await zip.generateAsync({ type: 'blob' });
   const path = `${S.user.id}/${m.id}/datasets/${ch.id}_${Date.now()}.zip`;
   const up = await sb.storage.from('studio').upload(path, zb, { contentType: 'application/zip' }); if (up.error) throw up.error;
   const { data: sg, error } = await sb.storage.from('studio').createSignedUrl(path, 60 * 60 * 24); if (error) throw error;
-  const app = S.settings.trainApp || 'fal-ai/flux-lora-fast-training';
-  const r = await callFn('falSubmit', { app, input: { images_data_url: sg.signedUrl, trigger_word: ch.trigger, steps, create_masks: true } });
-  addSpend(costTrain(steps));
+  const app = who ? WK[who].app : (S.settings.trainApp || 'fal-ai/flux-lora-fast-training');
+  const input = who === 'maestro' ? { images_data_url: sg.signedUrl, steps, resolution: 1024 } : { images_data_url: sg.signedUrl, trigger_word: ch.trigger, steps, create_masks: true };
+  const r = await callFn('falSubmit', { app, input });
+  const tc = who ? wkCost(who, 1, { steps }) : costTrain(steps); addSpend(tc); addFalSpend(tc, m); afterSpend(m, tc, { label: 'en enseñarle a ' + ch.name });
   ch.training = { request_id: r.request_id, status_url: r.status_url, response_url: r.response_url, status: 'IN_QUEUE', startedAt: Date.now(), app, n: blobs.length, dataset: path };
   (ch.history ||= []).push({ at: Date.now(), change: `Entrenamiento LoRA v${(ch.loraVersion || 0) + 1} enviado con ${blobs.length} imágenes` });
   touch(m); S.settings.trainSteps = steps; saveSettings();
@@ -226,9 +270,9 @@ async function pollTraining(mid, cid) {
         tr.status = st.status || tr.status; tr.queue = st.queue_position ?? null;
         if (st.status === 'COMPLETED') {
           const res = await callFn('falResult', { response_url: tr.response_url });
-          const url = res.diffusers_lora_file?.url;
+          const url = res.diffusers_lora_file?.url || res.lora_file?.url;
           if (!url) { tr.status = 'FAILED'; tr.error = res.error || 'Sin archivo LoRA'; }
-          else { ch.loraId = url; ch.loraVersion = (ch.loraVersion || 0) + 1; tr.doneAt = Date.now(); tr.lora = url; (ch.history ||= []).push({ at: Date.now(), change: `LoRA v${ch.loraVersion} entrenado y activado automáticamente` }); toast(`🎉 LoRA v${ch.loraVersion} de ${ch.name} listo y conectado`, 'ok'); if (S.user && tr.dataset) sb.storage.from('studio').remove([tr.dataset]).catch(() => { }); }
+          else { ch.loraId = url; ch.loraBase = /klein/.test(tr.app || '') ? 'klein' : 'flux1'; ch.loraVersion = (ch.loraVersion || 0) + 1; tr.doneAt = Date.now(); tr.lora = url; (ch.history ||= []).push({ at: Date.now(), change: `LoRA v${ch.loraVersion} entrenado y activado automáticamente` }); toast(`🎉 LoRA v${ch.loraVersion} de ${ch.name} listo y conectado`, 'ok'); if (S.user && tr.dataset) sb.storage.from('studio').remove([tr.dataset]).catch(() => { }); }
           touch(m); if (Route.view === 'lora') render(); break;
         }
         touch(m); if (Route.view === 'lora' && Route.a === cid) render();
@@ -244,13 +288,14 @@ function resumeTrainings() { for (const m of Object.values(S.manhwas)) for (cons
 ACT.updGen = async el => {
   const m = cur(); const ch = labChar(); const upd = ch.upd;
   if (!upd.change.trim()) return toast('Escribe qué cambió', 'err');
-  if (!await confirmCost('Actualizar personaje', [aiLine(1500, 400, 800, 'Aplicar tu cambio al prompt'), imgLine(4, 768, 1024)])) return;
+  const uw = charWorker(ch);
+  if (uw ? !await confirmWorker(uw, 4, { extra: 'Actualizar el look de tu personaje.' }) : !await confirmCost('Actualizar personaje', [aiLine(1500, 400, 800, 'Aplicar tu cambio al prompt'), imgLine(4, 768, 1024)])) return;
   await busy(el, async () => {
     const base = ch.visualPrompt || ch.appearance;
     const r = await aiJSON(`Prompt actual del personaje ${ch.name} (inglés): ${base}\nCambio pedido por el autor: ${upd.change}\nDevuelve el prompt actualizado aplicando EXACTAMENTE el cambio (y quitando lo que ya no va). También la nueva descripción en español para la ficha.\nFormato: {"prompt":"…","appearance_es":"…"}`, { max_tokens: 800, temperature: 0.3, confirmed: true, title: 'Actualizar personaje' });
     upd.prompt = r.prompt; upd.appearance = r.appearance_es;
     const loras = ch.loraId ? [{ path: ch.loraId, scale: Number(ch.loraWeight) || 0.9 }] : [];
-    upd.imgs = await falGenerate(m, { prompt: [m.bible.style.prefix, ch.trigger, r.prompt].filter(Boolean).join(', '), negative: m.bible.style.negative, loras, width: 768, height: 1024 }, 4, { character: ch.id, update: true }, { confirmed: true });
+    upd.imgs = await falGenerate(m, { prompt: [m.bible.style.prefix, ch.trigger, r.prompt].filter(Boolean).join(', '), negative: m.bible.style.negative, loras, width: 768, height: 1024, worker: uw }, 4, { character: ch.id, update: true }, { confirmed: true });
     upd.chosen = null; touch(m); render();
   }, 'Generando…');
 };
@@ -271,7 +316,13 @@ ACT.coverGen = async el => {
   await busy(el, async () => {
     const loras = ch?.loraId ? [{ path: ch.loraId, scale: Number(ch.loraWeight) || 0.9 }] : [];
     const prompt = [m.bible.style.prefix, 'epic manhwa cover art', ch && [ch.trigger, ch.visualPrompt || ch.appearance].filter(Boolean).join(' '), 'heroic epic dynamic pose, dramatic lighting, glowing aura, wind, detailed background, cinematic composition, empty space at the bottom for the title'].filter(Boolean).join(', ');
-    const ids = await falGenerate(m, { prompt, negative: m.bible.style.negative + ', text, letters, logo', loras, width: 1080, height: 1920 }, 1, { cover: true }, { title: 'Portada épica (1080×1920)' });
+    let o = { prompt, negative: m.bible.style.negative + ', text, letters, logo', loras, width: 1080, height: 1920 };
+    if (wkOn()) {
+      const titled = el.dataset.titled === '1';
+      if (titled) o = { prompt: `manhwa cover art, ${prompt.replace('empty space at the bottom for the title', '')}, big bold stylized title text "${m.name}" at the bottom, clean readable letters`, width: 1080, height: 1920, worker: 'portadas' };
+      else { const kd = loraKind(ch); o = { ...o, worker: kd === 'klein' ? 'obrero' : kd === 'clasico' ? 'obreroClasico' : 'artista', res: '2k' }; if (o.worker !== 'artista') { o.loras = loras; } else o.loras = []; }
+    }
+    const ids = await falGenerate(m, o, 1, { cover: true }, { title: 'Portada épica (1080×1920)' });
     m.covers.img = ids[0]; touch(m); render(); toast('Portada generada ✨', 'ok');
   }, 'Generando portada…');
 };

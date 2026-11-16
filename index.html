@@ -706,6 +706,7 @@ function render() {
   $('#view').innerHTML = html;
   renderSide();
   hydrateImages($('#view'));
+  if (typeof wkMount === 'function') wkMount();
   const after = AFTER[Route.view]; if (after) try { after(); } catch (e) { console.error(e); }
   window.scrollTo({ top: 0 });
 }
@@ -745,9 +746,11 @@ function renderSide() {
     }
   }
   h += `<div class="navsec">Estudio</div>`;
+  h += n('#/trabajadores', '👷', 'Mis 4 trabajadores', 'trabajadores');
   h += n('#/config', '⚙️', 'Configuración', 'config');
   if (typeof isStandalone === 'function' && !isStandalone()) h += `<a class="nav" data-a="installApp" style="${INSTALL_EVT ? 'color:var(--neon);font-weight:700' : ''}"><span class="ic">📲</span>Instalar app</a>`;
   h += `<a class="nav" data-a="ccOpen"><span class="ic">🔌</span>Claude Code: ${CC.ok ? '<b style="color:var(--ok)">SÍ</b>' : 'NO'}</a>`;
+  if (typeof falSpentMonth === 'function') h += `<a class="nav" data-a="go" data-to="#/trabajadores" style="margin-top:10px;border:1px solid var(--line);flex-direction:column;align-items:flex-start;gap:2px"><span class="tiny dim">💸 Este mes has gastado</span><b style="color:var(--neon)">${mx(falSpentMonth())} en Fal.ai</b></a>`;
   h += `<div style="margin-top:auto;padding:16px 10px 0" class="tiny dim">${S.user ? '☁️ ' + esc(S.user.email) : '💾 Modo local (inicia sesión para sincronizar)'}</div>`;
   $('#side').innerHTML = h;
 }
@@ -2085,7 +2088,7 @@ ACT.hdMake = async el => {
       pcm.push(data); total += dur;
       const gap = new Float32Array(Math.round(RATE * 0.35)); pcm.push(gap); total += gap.length / RATE;
     }
-    addSpend(costTTS(chars));
+    addSpend(costTTS(chars)); if (typeof addFalSpend === 'function') addFalSpend(costTTS(chars), m);
     const all = new Float32Array(pcm.reduce((a, x) => a + x.length, 0)); let o = 0; pcm.forEach(x => { all.set(x, o); o += x.length; });
     let blob, ext;
     if (window.lamejs) { prog('Comprimiendo a MP3…'); blob = await encodeMp3(all, RATE, f => prog(`Comprimiendo a MP3… ${Math.round(f * 100)}%`)); ext = 'mp3'; }
@@ -2626,7 +2629,7 @@ VIEWS.portada = () => {
   const prota = m.characters.find(c => c.id === m.bible.protagonistId) || m.characters[0];
   const imgs = Object.values(m.images || {}).sort((a, b) => b.createdAt - a.createdAt).slice(0, 40);
   return `<div class="head"><div><h1>🖼️ Generador de Portada</h1><p class="muted">Versión con título y sin título (para miniatura). Cuadrada 1080×1080 y vertical 1080×1920.</p></div>
-    <div class="row"><button class="pri big" data-a="coverGen">⚡ 1 CLIC: ${prota ? esc(prota.name) + ' en pose épica' : 'portada épica'} (Fal.ai)</button><button class="big" data-a="coverDl">⬇️ Descargar las 4</button></div></div>
+    <div class="row"><button class="pri big" data-a="coverGen">⚡ 1 CLIC: ${prota ? esc(prota.name) + ' en pose épica' : 'portada épica'}${typeof wkOn === 'function' && wkOn() ? ` · ${loraKind(prota) === 'klein' ? '👷 ' + mx(0.012) : '🎨 2K ' + mx(0.10)}` : ' (Fal.ai)'}</button>${typeof wkOn === 'function' && wkOn() ? `<button class="big" data-a="coverGen" data-titled="1">🔤 Portada con título (${mx(0.04)})</button>` : ''}<button class="big" data-a="coverDl">⬇️ Descargar las 4</button></div></div>
     <div class="covergrid">
       <div class="covers" id="covers"><div><canvas id="cv0"></canvas><div class="tiny muted">Cuadrada · con título</div></div><div><canvas id="cv1"></canvas><div class="tiny muted">Cuadrada · sin título</div></div><div><canvas id="cv2"></canvas><div class="tiny muted">Vertical · con título</div></div><div><canvas id="cv3"></canvas><div class="tiny muted">Vertical · sin título</div></div></div>
       <div class="panelbox">
@@ -2690,7 +2693,9 @@ const SHEET_SLOTS = [['front', 'Frente', 'full body, front view, standing, neutr
 const randSeed = () => Math.floor(Math.random() * 2147483000);
 function imgLine(n, w, h, label) { const mp = Math.max(1, Math.ceil(w * h / 1e6)); const app = S.settings.falApp || 'fal-ai/flux-lora'; return { label: label || `${plural(n, 'imagen', 'imágenes')} ${w}×${h} en Fal.ai`, cost: costImages(n, w, h), note: `${money(falUnit(app))} por megapíxel · ${mp} MP c/u${app === 'fal-ai/lora' ? ' · precio aproximado para Pony/SDXL' : ''}` }; }
 
-function falRequest(m, { prompt, negative = '', loras = [], width, height, seed, steps, cfg }) {
+function falRequest(m, o) {
+  if (o.worker) return workerReq(o.worker, o);
+  let { prompt, negative = '', loras = [], width, height, seed, steps, cfg } = o;
   const app = S.settings.falApp || 'fal-ai/flux-lora';
   const st = m.bible.style;
   width = Math.round((width || st.width || 800) / 8) * 8; height = Math.round((height || st.height || 1200) / 8) * 8;
@@ -2704,31 +2709,40 @@ function falRequest(m, { prompt, negative = '', loras = [], width, height, seed,
 /* genera N imágenes con semillas propias (para poder repetir cualquiera) */
 async function falGenerate(m, opts, n = 1, meta = {}, { confirmed = false, title = 'Generar imágenes en Fal.ai' } = {}) {
   const st0 = m.bible.style; const W0 = opts.width || st0.width || 800, H0 = opts.height || st0.height || 1200;
-  if (!confirmed && !await confirmCost(title, [imgLine(n, W0, H0)])) throw new Error('Cancelado');
+  const k = opts.worker || null; const one = k ? wkCost(k, 1, opts) : costImages(1, W0, H0);
+  if (!confirmed && !(k ? await confirmWorker(k, n, { res: opts.res, noun: opts.noun ? plural(n, ...opts.noun) : null }) : await confirmCost(title, [imgLine(n, W0, H0)]))) throw new Error('Cancelado');
   const seeds = Array.from({ length: n }, (_, i) => opts.seed != null ? opts.seed + i : randSeed());
   const runs = seeds.map(async seed => {
     const req = falRequest(m, { ...opts, seed });
     const r = await callFn('falRun', { app: req.app, input: req.input, manhwaId: m.id });
     const im = r.images?.[0]; if (!im) throw new Error('Fal.ai no devolvió imagen');
     if (r.has_nsfw_concepts?.[0]) toast('Fal.ai marcó una imagen como sensible y puede venir en negro.', 'err');
-    const settings = { app: req.app, width: req.input.image_size.width, height: req.input.image_size.height, steps: req.input.num_inference_steps, cfg: req.input.guidance_scale, loras: req.input.loras, model: req.input.model_name || null };
-    return addRemoteImage(m, im, { seed: r.seed ?? seed, prompt: opts.prompt, negative: opts.negative || '', settings, ...meta });
+    const settings = { app: req.app, worker: k, width: req.input.image_size?.width ?? null, height: req.input.image_size?.height ?? null, resolution: req.input.resolution || (k ? '1k' : null), aspect: req.input.aspect_ratio || null, steps: req.input.num_inference_steps, cfg: req.input.guidance_scale, loras: req.input.loras, model: req.input.model_name || null };
+    return addRemoteImage(m, im, { seed: r.seed ?? (k === 'artista' ? null : seed), prompt: opts.prompt, negative: opts.negative || '', settings, ...meta });
   });
   const res = await Promise.allSettled(runs);
   const ok = res.filter(x => x.status === 'fulfilled').map(x => x.value);
   const bad = res.find(x => x.status === 'rejected');
-  if (ok.length) addSpend(costImages(ok.length, W0, H0));
+  if (ok.length) { addSpend(one * ok.length); addFalSpend(one * ok.length, m, meta.chapter); }
+  if (ok.length && !opts.quiet) afterSpend(m, one * ok.length, { chapterId: meta.chapter });
   if (!ok.length && bad) throw bad.reason;
   if (bad) toast('Una imagen falló: ' + bad.reason.message, 'err');
   return ok;
 }
 
+/* el panel con su trabajador: El Obrero (1K) y solo los LoRAs que entiende */
+function panelReq(m, p) {
+  const P = buildPanelPrompt(m, p); if (!wkOn()) return P;
+  const { k, loras } = wkForPanel(m, p); return { ...P, loras, worker: k };
+}
+/* trabajador para un personaje: si ya aprendió con El Maestro → El Obrero; si no → El Artista */
+function charWorker(ch, fallback = 'artista') { if (!wkOn()) return null; const kd = loraKind(ch); return kd === 'klein' ? 'obrero' : kd === 'clasico' ? 'obreroClasico' : fallback; }
 /* ---------------- Paneles del capítulo ---------------- */
 ACT.genPanel = async el => {
   const m = cur(); const c = chapterById(m, Route.a); const p = c.panels[+el.dataset.i];
   await busy(el, async () => {
-    const P = buildPanelPrompt(m, p);
-    const [id] = await falGenerate(m, P, 1, { panel: p.id, chapter: c.id }, { title: `Generar panel #${+el.dataset.i + 1}` });
+    const P = panelReq(m, p);
+    const [id] = await falGenerate(m, { ...P, noun: ['panel', 'paneles'] }, 1, { panel: p.id, chapter: c.id }, { title: `Generar panel #${+el.dataset.i + 1}` });
     p.approved = true; p.imageId = id; p.seed = m.images[id].seed; touch(m); render(); toast(`Panel #${+el.dataset.i + 1} generado`, 'ok');
   }, 'Generando…');
 };
@@ -2738,22 +2752,31 @@ ACT.genChapter = async el => {
   if (!approved.length) return toast('Primero aprueba los paneles que quieres mandar a Fal.ai (✔ Aprobar en cada panel, o “Aprobar todos”).', 'err');
   let todo = approved.filter(x => !x.p.imageId);
   if (!todo.length) { if (!await confirmBox('Todos los paneles aprobados ya tienen imagen. ¿Generarlos de nuevo? (las anteriores quedan en la Galería)', { ok: 'Regenerar aprobados', danger: false })) return; todo = approved; }
-  const lines = []; const groups = {};
-  todo.forEach(({ p }) => { const P = buildPanelPrompt(m, p); const k = P.width + '×' + P.height; (groups[k] ||= { n: 0, w: P.width, h: P.height }).n++; });
-  Object.values(groups).forEach(g => lines.push(imgLine(g.n, g.w, g.h, `${plural(g.n, 'panel', 'paneles')} de ${g.w}×${g.h}`)));
   const pending = c.panels.length - approved.length;
-  if (!await confirmCost(`Generar ${plural(todo.length, 'panel', 'paneles')} en Fal.ai`, lines, { extra: pending ? `${plural(pending, 'panel', 'paneles')} sin aprobar no se mandarán.` : '' })) return;
+  if (wkOn()) {
+    const by = {}; todo.forEach(({ p }) => { const k = panelReq(m, p).worker; by[k] = (by[k] || 0) + 1; });
+    const ks = Object.keys(by); const extra = [pending ? `${plural(pending, 'panel', 'paneles')} sin aprobar no se mandarán.` : '', ks.length > 1 ? ks.map(k => `${WK[k].icon} ${WK[k].name}: ${plural(by[k], 'panel', 'paneles')} (${mx(wkCost(k, by[k]))})`).join('<br>') : '', by.obreroClasico ? 'Algunos personajes los aprendió El Maestro Clásico, por eso los dibuja El Obrero Clásico (cuesta más).' : ''].filter(Boolean).join('<br>');
+    if (ks.length === 1) { if (!await confirmWorker(ks[0], todo.length, { noun: plural(todo.length, 'panel', 'paneles'), extra })) return; }
+    else { const total = ks.reduce((a, k) => a + wkCost(k, by[k]), 0); if (!await confirmBox(`Vas a generar ${plural(todo.length, 'panel', 'paneles')} con tus obreros, te va a costar ${mx(total)}. ¿Le doy?<br><span class="small">${extra}</span>`, { ok: `Sí, dale (${mx(total)})`, danger: false, title: '👷 Generar capítulo' })) return; }
+  } else {
+    const lines = []; const groups = {};
+    todo.forEach(({ p }) => { const P = buildPanelPrompt(m, p); const k = P.width + '×' + P.height; (groups[k] ||= { n: 0, w: P.width, h: P.height }).n++; });
+    Object.values(groups).forEach(g => lines.push(imgLine(g.n, g.w, g.h, `${plural(g.n, 'panel', 'paneles')} de ${g.w}×${g.h}`)));
+    if (!await confirmCost(`Generar ${plural(todo.length, 'panel', 'paneles')} en Fal.ai`, lines, { extra: pending ? `${plural(pending, 'panel', 'paneles')} sin aprobar no se mandarán.` : '' })) return;
+  }
+  const spent0 = c.falSpent || 0;
   const prev = c.status; c.status = 'Generando'; touch(m);
   const prog = () => $('#genProg');
   let done = 0, fail = 0; el.disabled = true;
   for (const { p, i } of todo) {
     if (Route.view === 'cap' && prog()) prog().innerHTML = `<div class="small muted">Generando panel ${i + 1}… (${done}/${todo.length})</div><div class="bar"><i style="width:${Math.round(100 * done / todo.length)}%"></i></div>`;
-    try { const [id] = await falGenerate(m, buildPanelPrompt(m, p), 1, { panel: p.id, chapter: c.id }, { confirmed: true }); p.imageId = id; p.seed = m.images[id].seed; done++; touch(m); }
+    try { const [id] = await falGenerate(m, { ...panelReq(m, p), quiet: true }, 1, { panel: p.id, chapter: c.id }, { confirmed: true }); p.imageId = id; p.seed = m.images[id].seed; done++; touch(m); }
     catch (e) { fail++; toast(`Panel ${i + 1}: ${e.message}`, 'err'); if (/API key|Inicia sesión/.test(e.message)) break; }
   }
   c.status = prev === 'Generando' ? 'Borrador' : prev; touch(m);
   if (Route.view === 'cap') render();
   toast(`Listo: ${done} imágenes generadas${fail ? `, ${fail} fallaron` : ''}. Envíalas al armador.`, fail ? '' : 'ok');
+  if ((c.falSpent || 0) > spent0) setTimeout(() => afterSpend(m, c.falSpent - spent0, { chapterId: c.id }), 700);
 };
 
 /* ---------------- Laboratorio de LoRA ---------------- */
@@ -2772,7 +2795,8 @@ VIEWS.lora = () => {
 
     <div class="sect panelbox"><h2>1 · Describe a tu personaje como quieras</h2>
       <textarea ${bindAttr(lab, 'desc')} placeholder="Quiero mi prota con pelo negro, lunar pequeño bajo el ojo derecho, ojos grises, chaqueta negra…">${esc(lab.desc)}</textarea>
-      <div class="row"><button class="pri big" data-a="labStart">⚡ Generar 4 pruebas</button>${lab.rounds.length ? `<span class="small muted">${plural(lab.rounds.length, 'ronda', 'rondas')}</span>` : ''}</div>
+      ${wkOn() ? `<div class="row small" style="margin:6px 0">¿Quién dibuja? <select id="labWho">${[['artista', '🎨 El Artista Caro (bonito, para crear la cara)'], ['pruebas', '✏️ El de Pruebas (garabatos casi gratis)'], ...(loraKind(ch) === 'klein' ? [['obrero', '👷 El Obrero (ya sabe su cara)']] : [])].map(([v, l]) => `<option value="${v}" ${(S.settings.labWho || (loraKind(ch) === 'klein' ? 'obrero' : 'artista')) === v ? 'selected' : ''}>${l} · ${mx(wkCost(v, 1))} c/u</option>`).join('')}</select></div>` : ''}
+      <div class="row"><button class="pri big" data-a="labStart">⚡ Generar 4 pruebas</button>${wkOn() ? `<button data-a="labTwenty">🎨 20 fotos para El Maestro (${mx(wkCost('artista', 20))})</button>` : ''}${lab.rounds.length ? `<span class="small muted">${plural(lab.rounds.length, 'ronda', 'rondas')}</span>` : ''}</div>
     </div>
     ${lab.rounds.length ? `<div class="sect panelbox"><h2>2 · Elige y corrige</h2><div class="rounds">${[...lab.rounds].reverse().map((r, ri) => `<div class="round"><div class="small muted">Ronda ${lab.rounds.length - ri}${r.feedback ? ` · tu corrección: “${esc(r.feedback)}”` : ''}</div>${r.notes ? `<div class="tiny dim">IA: ${esc(r.notes)}</div>` : ''}<details><summary class="tiny dim" style="cursor:pointer">ver prompt</summary><div class="prompt">${esc(r.prompt)}</div></details><div class="igrid" style="margin-top:8px">${r.imgs.map(id => imgTile(id, 'lab')).join('')}</div></div>`).join('')}</div>
       <label class="f">¿Qué no te gustó? (dilo normal)<textarea id="labFb" placeholder="No me gustó su lunar, está muy grande. El cabello más largo."></textarea></label>
@@ -2786,6 +2810,7 @@ VIEWS.lora = () => {
     <div class="sect panelbox"><h2>4 · ENTRENAR MI LORA V2 EN FAL.AI</h2>
       <p class="small muted">Sube 20-30 imágenes corregidas del personaje (variedad de ángulos, luz y ropa). Las mando a entrenar y actualizo el LoRA ID solo cuando termine.</p>
       <div class="grid2"><label class="f">Trigger word<input ${bindAttr(ch, 'trigger')} value="${esc(ch.trigger || '')}" placeholder="ej. kaelmh"></label><label class="f">Pasos de entrenamiento<input type="number" id="trSteps" value="${S.settings.trainSteps || 1000}"></label></div>
+      ${wkOn() ? `<label class="f">¿Qué maestro le enseña?<select id="trWho"><option value="maestro" ${(S.settings.trWho || 'maestro') === 'maestro' ? 'selected' : ''}>🧑‍🏫 EL MAESTRO · ${mx(4.30)} una vez · luego El Obrero dibuja a ${mx(0.012)} el panel (recomendado)</option><option value="maestroClasico" ${S.settings.trWho === 'maestroClasico' ? 'selected' : ''}>🧑‍🏫 EL MAESTRO CLÁSICO · ${mx(2)} una vez · luego cada panel cuesta ${mx(0.035)}</option></select></label>` : ''}
       ${tr ? `<div class="alert ${tr.status === 'COMPLETED' ? 'ok' : tr.status === 'FAILED' ? 'bad' : 'info'}">${tr.status === 'COMPLETED' ? `✔ Entrenamiento terminado (${fmtDate(tr.doneAt)}). LoRA v${ch.loraVersion || 1} activo.` : tr.status === 'FAILED' ? '✕ Falló: ' + esc(tr.error || '') : `⏳ Entrenando (${esc(tr.status)})${tr.queue != null ? ' · en cola: ' + tr.queue : ''} · empezó ${fmtDate(tr.startedAt)}. Puedes cerrar la app; reviso al volver.`}</div>` : ''}
       <div class="row"><button class="pri" data-a="trainPick">📤 Subir 20-30 imágenes y entrenar</button><button data-a="trainFav">♥ Usar favoritas + hoja de modelo</button>${tr && !['COMPLETED', 'FAILED'].includes(tr.status) ? '<button data-a="trainCheck">🔄 Revisar estado</button>' : ''}</div>
       <div class="grid2"><label class="f">LoRA ID / URL actual<input ${bindAttr(ch, 'loraId')} value="${esc(ch.loraId || '')}"></label><label class="f">Peso LoRA<input type="number" step="0.05" ${bindAttr(ch, 'loraWeight', { num: 1 })} value="${ch.loraWeight ?? 0.9}"></label></div>
@@ -2814,18 +2839,37 @@ Formato: {"prompt":"…","notes":"qué cambiaste, en español, 1 frase"}`, { max
 async function labRun(el, feedback) {
   const m = cur(); const ch = labChar(); const lab = ch.lab;
   if (!lab.desc.trim()) return toast('Describe primero a tu personaje', 'err');
-  if (!await confirmCost(feedback ? 'Corregir y generar 4 nuevas' : 'Generar 4 pruebas', [aiLine(2500, 300, 800, 'Convertir tu descripción en prompt'), imgLine(4, 768, 1024)])) return;
+  const who = wkOn() ? ($('#labWho')?.value || 'artista') : null; if (who) { S.settings.labWho = who; saveSettings(); }
+  if (who ? !await confirmWorker(who, 4, { extra: isPremium() ? '' : 'Además Claude convierte tu descripción en instrucciones (cuesta centavos).' }) : !await confirmCost(feedback ? 'Corregir y generar 4 nuevas' : 'Generar 4 pruebas', [aiLine(2500, 300, 800, 'Convertir tu descripción en prompt'), imgLine(4, 768, 1024)])) return;
   await busy(el, async () => {
     const last = lab.rounds[lab.rounds.length - 1];
     const p = await labPrompt(m, ch, lab.desc, feedback ? last?.prompt : null, feedback);
     const prompt = [m.bible.style.prefix, p.prompt].filter(Boolean).join(', ');
     const loras = ch.loraId ? [{ path: ch.loraId, scale: Number(ch.loraWeight) || 0.9 }] : [];
-    const ids = await falGenerate(m, { prompt, negative: m.bible.style.negative, loras, width: 768, height: 1024 }, 4, { character: ch.id, lab: true }, { confirmed: true });
+    const ids = await falGenerate(m, { prompt, negative: m.bible.style.negative, loras, width: 768, height: 1024, worker: who }, 4, { character: ch.id, lab: true }, { confirmed: true });
     lab.rounds.push({ id: uid('r_'), prompt, feedback: feedback || '', notes: p.notes || '', imgs: ids, at: Date.now() });
     lab.chosen = null; touch(m); render();
   }, 'Generando 4…');
 }
 ACT.labStart = el => labRun(el, null);
+const TWENTY = ['front view, neutral', 'three-quarter view, smiling', 'side profile', 'looking over shoulder', 'close-up face, determined', 'close-up face, angry', 'close-up face, sad', 'close-up face, surprised', 'full body standing', 'full body walking', 'sitting, relaxed', 'running action pose', 'fighting stance', 'arms crossed', 'looking up', 'looking down', 'laughing', 'night lighting', 'sunset lighting', 'back view looking back'];
+ACT.labTwenty = async el => {
+  const m = cur(); const ch = labChar();
+  const base = ch.visualPrompt || (ch.lab?.rounds?.length ? ch.lab.rounds[ch.lab.rounds.length - 1].prompt : '') || ch.appearance;
+  if (!base) return toast('Primero crea y guarda el look de tu personaje (paso 1 y 2)', 'err');
+  if (!await confirmWorker('artista', 20, { extra: 'Hago 20 fotos de tu personaje en poses y caras distintas, y las marco ♥ para que El Maestro las use al entrenar.' })) return;
+  await busy(el, async () => {
+    let n = 0; const ids = [];
+    for (const pose of TWENTY) {
+      el.innerHTML = `<span class="spin"></span> ${++n}/20`;
+      try { const [id] = await falGenerate(m, { prompt: [m.bible.style.prefix, ch.trigger, base.replace(m.bible.style.prefix + ', ', ''), pose, 'same character, consistent design, plain background'].filter(Boolean).join(', '), width: 768, height: 1024, worker: 'artista', quiet: true }, 1, { character: ch.id, lab: true, train: true }, { confirmed: true }); m.images[id].liked = true; ids.push(id); }
+      catch (e) { toast(e.message, 'err'); if (/API key|sesión|saldo|balance/i.test(e.message)) break; }
+    }
+    ch.savedImages ||= []; ids.forEach(id => { const i = m.images[id]; if (!ch.savedImages.some(s => s.imgId === id)) ch.savedImages.push({ imgId: id, seed: i.seed, prompt: i.prompt, settings: i.settings }); });
+    touch(m); render(); toast(`Listo: ${ids.length} fotos marcadas ♥. Ahora en el paso del Maestro toca “Usar favoritas”.`, 'ok');
+    afterSpend(m, wkCost('artista', ids.length), { label: 'en las fotos de ' + ch.name });
+  }, 'Generando…');
+};
 ACT.labFix = el => { const fb = $('#labFb').value.trim(); if (!fb) return toast('Escribe qué quieres corregir', 'err'); labRun(el, fb); };
 ACT.labPick = (el, e) => { if (e?.target.closest('.heart')) return; const m = cur(); const ch = labChar(); ch.lab.chosen = el.dataset.id; touch(m); render(); };
 ACT.labSave = () => {
@@ -2845,7 +2889,7 @@ async function sheetGen(m, ch, k, confirmed = false) {
   const base = ch.visualPrompt || ch.appearance || ch.name;
   const loras = ch.loraId ? [{ path: ch.loraId, scale: Number(ch.loraWeight) || 0.9 }] : [];
   const prompt = [m.bible.style.prefix, 'character model sheet', base, slot[2], 'plain light gray background'].filter(Boolean).join(', ');
-  const [id] = await falGenerate(m, { prompt, negative: m.bible.style.negative, loras, width: 768, height: 1024, seed: ch.visualSeed ?? undefined }, 1, { character: ch.id, sheet: k }, { confirmed, title: 'Hoja de modelo: ' + slot[1] });
+  const [id] = await falGenerate(m, { prompt, negative: m.bible.style.negative, loras, width: 768, height: 1024, seed: ch.visualSeed ?? undefined, worker: charWorker(ch), quiet: confirmed }, 1, { character: ch.id, sheet: k }, { confirmed, title: 'Hoja de modelo: ' + slot[1] });
   (ch.sheet ||= {})[k] = id; touch(m);
 }
 ACT.sheetSlot = async el => {
@@ -2857,8 +2901,9 @@ ACT.sheetSlot = async el => {
 };
 ACT.sheetAll = async el => {
   const m = cur(); const ch = labChar();
-  if (!await confirmCost('Hoja de modelo completa', [imgLine(SHEET_SLOTS.length, 768, 1024, `${SHEET_SLOTS.length} vistas y expresiones (768×1024)`)])) return;
-  await busy(el, async () => { let n = 0; for (const [k] of SHEET_SLOTS) { el.innerHTML = `<span class="spin"></span> ${++n}/${SHEET_SLOTS.length}`; try { await sheetGen(m, ch, k, true); } catch (e) { toast(e.message, 'err'); if (/API key|sesión/.test(e.message)) break; } } render(); toast('Hoja de modelo lista', 'ok'); }, 'Generando…');
+  const sw = charWorker(ch);
+  if (sw ? !await confirmWorker(sw, SHEET_SLOTS.length, { extra: 'Hoja de modelo: vistas de frente, perfil, espalda y 8 expresiones.' }) : !await confirmCost('Hoja de modelo completa', [imgLine(SHEET_SLOTS.length, 768, 1024, `${SHEET_SLOTS.length} vistas y expresiones (768×1024)`)])) return;
+  await busy(el, async () => { let n = 0; for (const [k] of SHEET_SLOTS) { el.innerHTML = `<span class="spin"></span> ${++n}/${SHEET_SLOTS.length}`; try { await sheetGen(m, ch, k, true); } catch (e) { toast(e.message, 'err'); if (/API key|sesión/.test(e.message)) break; } } render(); toast('Hoja de modelo lista', 'ok'); if (sw) afterSpend(m, wkCost(sw, SHEET_SLOTS.length), { label: 'en la hoja de modelo' }); }, 'Generando…');
 };
 
 /* Entrenamiento LoRA v2 */
@@ -2867,16 +2912,18 @@ async function startTraining(m, ch, blobs) {
   if (blobs.length < 10) throw new Error(`Solo hay ${blobs.length} imágenes. Usa al menos 10 (ideal 20-30).`);
   if (!ch.trigger) ch.trigger = norm(ch.name).replace(/\s/g, '') + 'mh';
   const steps = Number($('#trSteps')?.value) || S.settings.trainSteps || 1000;
-  if (!await confirmCost('Entrenar LoRA en Fal.ai', [{ label: `Entrenamiento de ${ch.name} · ${blobs.length} imágenes · ${steps} pasos`, cost: costTrain(steps), note: `${money(falUnit(S.settings.trainApp || 'fal-ai/flux-lora-fast-training'))} por cada 1000 pasos` }])) throw new Error('Cancelado');
+  const who = wkOn() ? ($('#trWho')?.value || S.settings.trWho || 'maestro') : null; if (who) { S.settings.trWho = who; saveSettings(); }
+  if (who ? !await confirmWorker(who, 1, { steps, extra: `Le enseño a ${esc(ch.name)} con ${blobs.length} fotos. Tarda unos minutos y te aviso cuando termine.${who === 'maestroClasico' ? '<br>⚠️ Lo que enseña El Maestro Clásico no lo entiende El Obrero: sus paneles costarán ' + mx(0.035) + ' cada uno.' : ''}` }) : !await confirmCost('Entrenar LoRA en Fal.ai', [{ label: `Entrenamiento de ${ch.name} · ${blobs.length} imágenes · ${steps} pasos`, cost: costTrain(steps), note: `${money(falUnit(S.settings.trainApp || 'fal-ai/flux-lora-fast-training'))} por cada 1000 pasos` }])) throw new Error('Cancelado');
   const zip = new JSZip(); const cap = `${ch.trigger}, ${ch.visualPrompt || ch.appearance || ch.name}`;
   blobs.forEach((b, i) => { const n = String(i + 1).padStart(3, '0'); zip.file(`${n}.${(b.type || '').includes('png') ? 'png' : 'jpg'}`, b); zip.file(`${n}.txt`, cap); });
   const zb = await zip.generateAsync({ type: 'blob' });
   const path = `${S.user.id}/${m.id}/datasets/${ch.id}_${Date.now()}.zip`;
   const up = await sb.storage.from('studio').upload(path, zb, { contentType: 'application/zip' }); if (up.error) throw up.error;
   const { data: sg, error } = await sb.storage.from('studio').createSignedUrl(path, 60 * 60 * 24); if (error) throw error;
-  const app = S.settings.trainApp || 'fal-ai/flux-lora-fast-training';
-  const r = await callFn('falSubmit', { app, input: { images_data_url: sg.signedUrl, trigger_word: ch.trigger, steps, create_masks: true } });
-  addSpend(costTrain(steps));
+  const app = who ? WK[who].app : (S.settings.trainApp || 'fal-ai/flux-lora-fast-training');
+  const input = who === 'maestro' ? { images_data_url: sg.signedUrl, steps, resolution: 1024 } : { images_data_url: sg.signedUrl, trigger_word: ch.trigger, steps, create_masks: true };
+  const r = await callFn('falSubmit', { app, input });
+  const tc = who ? wkCost(who, 1, { steps }) : costTrain(steps); addSpend(tc); addFalSpend(tc, m); afterSpend(m, tc, { label: 'en enseñarle a ' + ch.name });
   ch.training = { request_id: r.request_id, status_url: r.status_url, response_url: r.response_url, status: 'IN_QUEUE', startedAt: Date.now(), app, n: blobs.length, dataset: path };
   (ch.history ||= []).push({ at: Date.now(), change: `Entrenamiento LoRA v${(ch.loraVersion || 0) + 1} enviado con ${blobs.length} imágenes` });
   touch(m); S.settings.trainSteps = steps; saveSettings();
@@ -2907,9 +2954,9 @@ async function pollTraining(mid, cid) {
         tr.status = st.status || tr.status; tr.queue = st.queue_position ?? null;
         if (st.status === 'COMPLETED') {
           const res = await callFn('falResult', { response_url: tr.response_url });
-          const url = res.diffusers_lora_file?.url;
+          const url = res.diffusers_lora_file?.url || res.lora_file?.url;
           if (!url) { tr.status = 'FAILED'; tr.error = res.error || 'Sin archivo LoRA'; }
-          else { ch.loraId = url; ch.loraVersion = (ch.loraVersion || 0) + 1; tr.doneAt = Date.now(); tr.lora = url; (ch.history ||= []).push({ at: Date.now(), change: `LoRA v${ch.loraVersion} entrenado y activado automáticamente` }); toast(`🎉 LoRA v${ch.loraVersion} de ${ch.name} listo y conectado`, 'ok'); if (S.user && tr.dataset) sb.storage.from('studio').remove([tr.dataset]).catch(() => { }); }
+          else { ch.loraId = url; ch.loraBase = /klein/.test(tr.app || '') ? 'klein' : 'flux1'; ch.loraVersion = (ch.loraVersion || 0) + 1; tr.doneAt = Date.now(); tr.lora = url; (ch.history ||= []).push({ at: Date.now(), change: `LoRA v${ch.loraVersion} entrenado y activado automáticamente` }); toast(`🎉 LoRA v${ch.loraVersion} de ${ch.name} listo y conectado`, 'ok'); if (S.user && tr.dataset) sb.storage.from('studio').remove([tr.dataset]).catch(() => { }); }
           touch(m); if (Route.view === 'lora') render(); break;
         }
         touch(m); if (Route.view === 'lora' && Route.a === cid) render();
@@ -2925,13 +2972,14 @@ function resumeTrainings() { for (const m of Object.values(S.manhwas)) for (cons
 ACT.updGen = async el => {
   const m = cur(); const ch = labChar(); const upd = ch.upd;
   if (!upd.change.trim()) return toast('Escribe qué cambió', 'err');
-  if (!await confirmCost('Actualizar personaje', [aiLine(1500, 400, 800, 'Aplicar tu cambio al prompt'), imgLine(4, 768, 1024)])) return;
+  const uw = charWorker(ch);
+  if (uw ? !await confirmWorker(uw, 4, { extra: 'Actualizar el look de tu personaje.' }) : !await confirmCost('Actualizar personaje', [aiLine(1500, 400, 800, 'Aplicar tu cambio al prompt'), imgLine(4, 768, 1024)])) return;
   await busy(el, async () => {
     const base = ch.visualPrompt || ch.appearance;
     const r = await aiJSON(`Prompt actual del personaje ${ch.name} (inglés): ${base}\nCambio pedido por el autor: ${upd.change}\nDevuelve el prompt actualizado aplicando EXACTAMENTE el cambio (y quitando lo que ya no va). También la nueva descripción en español para la ficha.\nFormato: {"prompt":"…","appearance_es":"…"}`, { max_tokens: 800, temperature: 0.3, confirmed: true, title: 'Actualizar personaje' });
     upd.prompt = r.prompt; upd.appearance = r.appearance_es;
     const loras = ch.loraId ? [{ path: ch.loraId, scale: Number(ch.loraWeight) || 0.9 }] : [];
-    upd.imgs = await falGenerate(m, { prompt: [m.bible.style.prefix, ch.trigger, r.prompt].filter(Boolean).join(', '), negative: m.bible.style.negative, loras, width: 768, height: 1024 }, 4, { character: ch.id, update: true }, { confirmed: true });
+    upd.imgs = await falGenerate(m, { prompt: [m.bible.style.prefix, ch.trigger, r.prompt].filter(Boolean).join(', '), negative: m.bible.style.negative, loras, width: 768, height: 1024, worker: uw }, 4, { character: ch.id, update: true }, { confirmed: true });
     upd.chosen = null; touch(m); render();
   }, 'Generando…');
 };
@@ -2952,7 +3000,13 @@ ACT.coverGen = async el => {
   await busy(el, async () => {
     const loras = ch?.loraId ? [{ path: ch.loraId, scale: Number(ch.loraWeight) || 0.9 }] : [];
     const prompt = [m.bible.style.prefix, 'epic manhwa cover art', ch && [ch.trigger, ch.visualPrompt || ch.appearance].filter(Boolean).join(' '), 'heroic epic dynamic pose, dramatic lighting, glowing aura, wind, detailed background, cinematic composition, empty space at the bottom for the title'].filter(Boolean).join(', ');
-    const ids = await falGenerate(m, { prompt, negative: m.bible.style.negative + ', text, letters, logo', loras, width: 1080, height: 1920 }, 1, { cover: true }, { title: 'Portada épica (1080×1920)' });
+    let o = { prompt, negative: m.bible.style.negative + ', text, letters, logo', loras, width: 1080, height: 1920 };
+    if (wkOn()) {
+      const titled = el.dataset.titled === '1';
+      if (titled) o = { prompt: `manhwa cover art, ${prompt.replace('empty space at the bottom for the title', '')}, big bold stylized title text "${m.name}" at the bottom, clean readable letters`, width: 1080, height: 1920, worker: 'portadas' };
+      else { const kd = loraKind(ch); o = { ...o, worker: kd === 'klein' ? 'obrero' : kd === 'clasico' ? 'obreroClasico' : 'artista', res: '2k' }; if (o.worker !== 'artista') { o.loras = loras; } else o.loras = []; }
+    }
+    const ids = await falGenerate(m, o, 1, { cover: true }, { title: 'Portada épica (1080×1920)' });
     m.covers.img = ids[0]; touch(m); render(); toast('Portada generada ✨', 'ok');
   }, 'Generando portada…');
 };
@@ -4857,6 +4911,194 @@ ACT.dlLoras = async el => { const m = cur(); await busy(el, async () => { await 
 ACT.dlImg = async (el, e) => { e?.stopPropagation?.(); const m = cur(); const id = el.dataset.id; const meta = m.images[id]; const b = await getImageBlob(m, id); if (!b) return toast('No encontré la imagen', 'err'); downloadBlob(b, `${fileSafe(m.name)}-${meta?.sticker ? 'sticker' : 'imagen'}-${id.slice(-6)}${meta?.seed != null ? '-seed-' + meta.seed : ''}.${extOf(b)}`); };
 ACT.dlVideoFiles = async el => { const m = cur(); const v = vById(m, el.dataset.id); await busy(el, async () => { const z = new JSZip(); z.file('proyecto.json', JSON.stringify(v, null, 1)); let n = 0; for (const id of new Set(v.clips.map(c => c.media).filter(Boolean))) { const md = m.media?.[id]; const b = md?.img || m.images?.[id] ? await getImageBlob(m, id) : await mediaBlob(m, id); if (b) { z.file(`${fileSafe(md?.name || 'archivo')}-${id.slice(-5)}.${(b.type.split('/')[1] || 'bin').split(';')[0]}`, b, { binary: true }); n++; } } downloadBlob(await z.generateAsync({ type: 'blob', compression: 'STORE' }), `${fileSafe(v.name)} - archivos.zip`); toast(`${n} archivos del video descargados (para el video final usa Exportar)`, 'ok'); }, 'Preparando…'); };
 ACT.dlClipMedia = async () => { const m = cur(); const v = vById(m, Route.a); const c = v?.clips.find(x => x.id === VED.sel); if (!c?.media) return toast('Este clip no tiene archivo (está hecho con código)', 'err'); const md = m.media?.[c.media]; const b = md?.img || m.images?.[c.media] ? await getImageBlob(m, c.media) : await mediaBlob(m, c.media); if (!b) return toast('No encontré el archivo', 'err'); downloadBlob(b, `${fileSafe(md?.name || c.name || 'archivo')}.${(b.type.split('/')[1] || 'bin').split(';')[0]}`); };
+
+/* =====================================================================
+   MIS 4 TRABAJADORES DE FAL.AI
+   Cada modelo de Fal.ai es un "trabajador" con su precio en pesos.
+   Siempre se muestra el precio ANTES de generar y lo que se gastó DESPUÉS.
+   Precios tomados de las páginas de cada modelo en Fal.ai (nov 2026).
+   ===================================================================== */
+const WK = {
+  artista: {
+    icon: '🎨', name: 'EL ARTISTA CARO', app: 'blackforestlabs/flux-3/text-to-image', tone: 'warn',
+    what: 'Hace dibujos hermosos. Úsalo 1 sola vez al principio para crear la cara de tu protagonista (y para portadas bonitas).',
+    says: 'Este es caro, úsalo solo para crear a tu personaje, no para hacer capítulos enteros',
+    list: [['1 imagen en 1K', 0.048], ['1 imagen en 2K', 0.10], ['1 portada en 2K', 0.10], ['20 imágenes para crear a tu prota', 0.96]]
+  },
+  maestro: {
+    icon: '🧑‍🏫', name: 'EL MAESTRO', app: 'blackforestlabs/flux-3/klein/base/trainer', per1000: 4.30, tone: 'neon',
+    what: 'Se aprende la cara de tu personaje. Le das unas 20 fotos y ya nunca se le olvida.',
+    says: 'Pagas una sola vez y ya nunca se le olvida la cara de tu prota',
+    list: [['Enseñarle 1 personaje (una sola vez)', 4.30], ['3 personajes', 12.90]],
+    extra: 'No cobra por mes ni renta. Pagas una vez y es tuyo para siempre.'
+  },
+  maestroClasico: {
+    icon: '🧑‍🏫', name: 'EL MAESTRO CLÁSICO', app: 'fal-ai/flux-lora-fast-training', per1000: 2,
+    what: 'Más barato ($2), pero lo que aprende NO lo puede usar El Obrero. Sus personajes se dibujan con El Obrero Clásico ($0.035 por panel).'
+  },
+  obrero: {
+    icon: '👷', name: 'EL OBRERO', app: 'blackforestlabs/flux-3/klein/text-to-image/lora', each: 0.012, tone: 'ok',
+    what: 'Hace TODOS tus capítulos con tu personaje fijo, usando lo que le enseñó El Maestro.',
+    says: 'Este es el que vas a usar todos los días, es el más barato y ya sabe la cara de tu prota',
+    list: [['1 panel en 1K', 0.012], ['1 capítulo de 10 paneles', 0.12], ['1 capítulo de 40 paneles', 0.48], ['1 mes: 4 capítulos de 40 paneles', 1.92]]
+  },
+  obreroClasico: {
+    icon: '👷', name: 'EL OBRERO CLÁSICO', app: 'fal-ai/flux-lora', each: 0.035,
+    what: 'Dibuja a los personajes que aprendió El Maestro Clásico (o LoRAs que ya tenías).'
+  },
+  pruebas: {
+    icon: '✏️', name: 'EL DE PRUEBAS', app: 'blackforestlabs/flux-3/klein/text-to-image', each: 0.009, tone: '',
+    what: 'Hace garabatos rápidos para probar poses e ideas. No sabe la cara de tu prota.',
+    says: 'Usa este para probar ideas, casi no cobra nada',
+    list: [['1 imagen de prueba en 1K', 0.009], ['100 imágenes de prueba', 0.90]]
+  },
+  portadas: {
+    icon: '🔤', name: 'EL DE PORTADAS', app: 'fal-ai/recraft/v3/text-to-image', each: 0.04, tone: '',
+    what: 'Solo para portadas que llevan el título con letras (los otros a veces escriben las letras chuecas).',
+    says: 'Solo úsalo para portadas con título',
+    list: [['1 portada con título', 0.04]]
+  }
+};
+const wkOn = () => S.settings.useWorkers !== false;
+const mxnRate = () => Number(S.settings.mxnRate) || 17;
+const mx = usd => '$' + (usd * mxnRate()).toFixed(2) + ' MXN';
+const usdTxt = usd => '$' + (usd < 0.1 ? usd.toFixed(3) : usd.toFixed(2)) + ' USD';
+function wkCost(k, n = 1, o = {}) {
+  const W = WK[k]; if (!W) return 0;
+  if (k === 'artista') return n * (o.res === '2k' ? 0.10 : 0.048);
+  if (W.per1000) return n * W.per1000 * ((o.steps || 1000) / 1000);
+  return n * W.each;
+}
+/* 1K: el área no pasa de 1024×1024 (1 megapíxel) — se ve perfecto en celular */
+function fit1K(w, h) { const r = (h || 1) / (w || 1); let W = Math.sqrt(1048576 / r), H = W * r; W = Math.floor(W / 16) * 16; H = Math.floor(H / 16) * 16; return { w: W, h: H }; }
+const ARS = ['21:9', '2:1', '16:9', '3:2', '7:5', '4:3', '5:4', '1:1', '4:5', '3:4', '5:7', '2:3', '9:16', '1:2'];
+function nearestAR(w, h) { const r = w / h; return ARS.reduce((b, a) => { const [x, y] = a.split(':').map(Number); return Math.abs(Math.log(x / y / r)) < Math.abs(Math.log(b[1])) ? [a, x / y / r] : b; }, ['1:1', 99])[0]; }
+function workerReq(k, { prompt, loras = [], width = 800, height = 1200, seed, res = '1k' }) {
+  const W = WK[k]; const s = fit1K(width, height); const L = (loras || []).filter(l => l.path).slice(0, 3);
+  if (k === 'artista') return { app: W.app, input: { prompt, aspect_ratio: nearestAR(width, height), resolution: res === '2k' ? '2k' : '1k', output_format: 'jpeg' } };
+  if (k === 'obrero') return { app: W.app, input: { prompt, loras: L, image_size: { width: s.w, height: s.h }, num_images: 1, seed, output_format: 'jpeg', enable_prompt_expansion: false } };
+  if (k === 'pruebas') return { app: W.app, input: { prompt, image_size: { width: s.w, height: s.h }, num_images: 1, seed, output_format: 'jpeg', enable_prompt_expansion: false } };
+  if (k === 'obreroClasico') return { app: W.app, input: { prompt, loras: L, image_size: { width: s.w, height: s.h }, num_images: 1, seed, num_inference_steps: 28, guidance_scale: 3.5, output_format: 'jpeg', enable_safety_checker: true } };
+  if (k === 'portadas') return { app: W.app, input: { prompt, image_size: { width: 1024, height: Math.round(1024 * height / width / 16) * 16 }, style: 'digital_illustration' } };
+  throw new Error('Trabajador desconocido');
+}
+/* ¿qué trabajador dibuja a este personaje? */
+const loraKind = c => !c?.loraId ? null : (c.loraBase === 'klein' ? 'klein' : 'clasico');
+function wkForChars(chars) {
+  const kinds = new Set(chars.map(loraKind).filter(Boolean));
+  if (kinds.has('clasico') && !kinds.has('klein')) return 'obreroClasico';
+  return 'obrero';
+}
+function wkForPanel(m, p) {
+  const chars = (p.characters || []).map(n => charByName(m, n)).filter(Boolean);
+  const k = wkForChars(chars);
+  const loras = chars.filter(c => c.loraId && (k === 'obrero' ? loraKind(c) === 'klein' : loraKind(c) === 'clasico')).map(c => ({ path: c.loraId, scale: Number(c.loraWeight) || 0.9 }));
+  return { k, loras };
+}
+/* ---------- gasto en Fal.ai ---------- */
+function falSpentMonth(mk = monthKey()) { return (S.settings.falSpend || {})[mk] || 0; }
+function falSpentTotal() { return Object.values(S.settings.falSpend || {}).reduce((a, b) => a + b, 0); }
+function addFalSpend(v, m, chapterId) {
+  if (!(v > 0)) return; S.settings.falSpend ||= {}; S.settings.falSpend[monthKey()] = falSpentMonth() + v; saveSettings();
+  const c = chapterId && m ? chapterById(m, chapterId) : null; if (c) { c.falSpent = (c.falSpent || 0) + v; touch(m); }
+  if (typeof renderSide === 'function') renderSide();
+}
+/* ---------- saldo: el real de Fal.ai, o el que tú anotaste ---------- */
+let BAL = null;
+async function falSaldo(fresh = false) {
+  if (!fresh && BAL && Date.now() - BAL.at < 30000) return BAL;
+  if (S.user && S.keyStatus?.fal !== false) {
+    try { const r = await callFn('falBalance'); if (typeof r.balance === 'number') return (BAL = { usd: r.balance, real: true, at: Date.now() }); } catch (e) { }
+  }
+  const sv = S.settings.saldo; if (sv && typeof sv.usd === 'number') return (BAL = { usd: sv.usd - (falSpentTotal() - (sv.spentAt || 0)), real: false, at: Date.now() });
+  return null;
+}
+const saldoTxt = b => b ? `${mx(Math.max(0, b.usd))} (${usdTxt(Math.max(0, b.usd))})${b.real ? '' : ' aprox.'}` : null;
+/* ---------- "¿Le doy?" ---------- */
+async function confirmWorker(k, n, { noun = null, res = '1k', steps, extra = '' } = {}) {
+  const W = WK[k]; const total = wkCost(k, n, { res, steps }); const one = wkCost(k, 1, { res, steps });
+  const what = noun || (k === 'maestro' || k === 'maestroClasico' ? null : plural(n, 'imagen', 'imágenes'));
+  const b = await falSaldo();
+  return new Promise(resolve => {
+    const bg = modal(`<h2>${W.icon} ${W.name}</h2>
+      <p style="font-size:18px;line-height:1.5">${what ? `Vas a generar <b>${esc(what)}</b> con <b>${W.name}</b>` : `<b>${W.name}</b> va a aprender la cara de tu personaje`}, te va a costar <b style="color:var(--neon);font-size:22px">${mx(total)}</b>. ¿Le doy?</p>
+      <div class="small muted">${n > 1 ? `${mx(one)} cada ${what && /panel/.test(what) ? 'uno' : 'una'} · ` : ''}≈ ${usdTxt(total)}${k === 'artista' ? ` · tamaño ${res === '2k' ? '2K' : '1K'}` : ''}</div>
+      ${W.says ? `<div class="alert ${W.tone === 'warn' ? 'warn' : 'info'} small">💬 “${esc(W.says)}”</div>` : ''}
+      ${extra ? `<div class="alert info small"><div>${extra}</div></div>` : ''}
+      <div class="tiny dim">${b ? `Tu saldo en Fal.ai: ${saldoTxt(b)}. ` : ''}Este mes llevas ${mx(falSpentMonth())} en Fal.ai.</div>
+      ${b && b.usd < total ? `<div class="alert bad small">⚠️ Parece que no te alcanza el saldo. Recarga en fal.ai antes de darle.</div>` : ''}
+      <div class="acts"><button data-x="no">No</button><button class="pri" data-x="yes">Sí, dale (${mx(total)})</button></div>`, { onClose: () => resolve(false) });
+    bg.querySelector('[data-x=no]').onclick = () => { bg.remove(); resolve(false); };
+    bg.querySelector('[data-x=yes]').onclick = () => { bg.remove(); resolve(true); };
+  });
+}
+/* "Ya gastaste…" */
+async function afterSpend(m, spent, { chapterId = null, label = '' } = {}) {
+  if (!(spent > 0)) return;
+  const c = chapterId ? chapterById(m, chapterId) : null; const b = await falSaldo(true);
+  const msg = c ? `Ya gastaste ${mx(c.falSpent || spent)} en este capítulo` : `Gastaste ${mx(spent)}${label ? ' ' + label : ''}`;
+  toast(`💸 ${msg}${b ? `, te quedan ${saldoTxt(b)} de saldo` : ''}.`, 'ok');
+}
+
+/* ---------- La sección ---------- */
+function wkCard(k, opts = {}) {
+  const W = WK[k];
+  return `<div class="card wkcard" style="border-color:${W.tone === 'warn' ? 'var(--warn)' : W.tone === 'ok' ? 'var(--ok)' : W.tone === 'neon' ? 'var(--neon)' : 'var(--line)'}">
+    <div class="row nw" style="gap:12px"><div style="font-size:42px;line-height:1">${W.icon}</div><div class="grow"><div class="tiny dim">${opts.n ? 'TRABAJADOR ' + opts.n : 'EXTRA'}</div><h2 style="margin:0">${W.name}</h2></div></div>
+    <p style="margin:10px 0">${esc(W.what)}</p>
+    <table class="t" style="width:100%">${W.list.map(([l, v]) => `<tr><td>${esc(l)}</td><td style="text-align:right;white-space:nowrap"><b>${mx(v)}</b><div class="tiny dim">${usdTxt(v)}</div></td></tr>`).join('')}</table>
+    ${W.extra ? `<p class="small" style="margin:8px 0 0">${esc(W.extra)}</p>` : ''}
+    <div class="alert ${W.tone === 'warn' ? 'warn' : 'info'} small" style="margin-top:10px">💬 “${esc(W.says)}”</div>
+    ${opts.after || ''}
+  </div>`;
+}
+VIEWS.trabajadores = () => {
+  const mk = monthKey(); const months = Object.entries(S.settings.falSpend || {}).sort().reverse().slice(0, 6);
+  const m = cur(); const caps = m ? chapterList(m).filter(c => c.falSpent) : [];
+  return `<div class="head"><div><h1>👷 MIS 4 TRABAJADORES DE FAL.AI</h1><p class="muted">Cada vez que la app hace un dibujo, uno de estos trabajadores lo hace y Fal.ai te cobra. Aquí ves cuánto cobra cada uno, en pesos.</p></div></div>
+    <div class="grid2" style="margin-bottom:14px">
+      <div class="card" style="border-color:var(--neon)"><div class="tiny dim">ESTE MES (${mk})</div><div style="font-size:30px;font-weight:800;color:var(--neon)">${mx(falSpentMonth())}</div><div class="small muted">Este mes has gastado ${mx(falSpentMonth())} en Fal.ai (≈ ${usdTxt(falSpentMonth())})</div>
+        ${months.length > 1 ? `<div class="tiny dim" style="margin-top:8px">${months.slice(1).map(([k, v]) => `${k}: ${mx(v)}`).join(' · ')}</div>` : ''}</div>
+      <div class="card"><div class="tiny dim">TU SALDO EN FAL.AI</div><div id="wkSaldo" style="font-size:30px;font-weight:800"><span class="spin"></span></div><div class="small muted" id="wkSaldoNote"></div>
+        <div class="row" style="margin-top:8px"><button class="sm" data-a="wkSaldoSet">✏️ Anotar lo que recargué</button><a class="btn sm" href="https://fal.ai/dashboard/billing" target="_blank" rel="noopener">💳 Recargar en fal.ai</a></div></div>
+    </div>
+    <div class="alert info" style="margin-bottom:14px"><div><b>📱 Tamaños:</b> los paneles siempre salen en <b>1K</b>, porque 1K se ve perfecto en celular y 4K es tirar dinero. Solo las portadas se hacen en <b>2K</b>.<br>
+      <b>💲 Siempre te pregunto antes:</b> “Vas a generar X paneles con EL OBRERO, te va a costar $X MXN. ¿Le doy?” y al terminar te digo cuánto gastaste y cuánto saldo te queda.</div></div>
+    <div class="alert warn" style="margin-bottom:14px"><div><b>⚠️ Importante:</b> El Obrero solo reconoce lo que le enseñó <b>EL MAESTRO</b> ($4.30 USD = ${mx(4.30)} una vez por personaje). Hay un Maestro más barato ($2 USD = ${mx(2)}), pero lo que él enseña <b>no le sirve al Obrero</b>. Con ese, tus capítulos los dibuja El Obrero Clásico a ${mx(0.035)} por panel (casi 3 veces más caro). Si haces muchos capítulos, El Maestro de $4.30 te sale más barato.<br>
+      <span class="small">Ejemplo de 1 mes (4 capítulos de 40 paneles): con El Maestro ${mx(4.30)} + ${mx(1.92)} = <b>${mx(6.22)}</b> el primer mes y luego ${mx(1.92)} al mes · con el clásico ${mx(2)} + ${mx(5.60)} = <b>${mx(7.60)}</b> y luego ${mx(5.60)} al mes.</span></div></div>
+    <div class="grid2">
+      ${wkCard('artista', { n: 1 })}
+      ${wkCard('maestro', { n: 2 })}
+      ${wkCard('obrero', { n: 3, after: m ? `<div class="small" style="margin-top:8px">${m.characters.filter(c => c.loraId).map(c => `<span class="chip ${loraKind(c) === 'klein' ? 'ok' : 'warn'}">${esc(c.name)}: ${loraKind(c) === 'klein' ? 'lo dibuja El Obrero' : 'lo dibuja El Obrero Clásico'}</span>`).join(' ') || '<span class="muted">Ningún personaje aprendido todavía. Ve al Laboratorio LoRA.</span>'}</div>` : '' })}
+      ${wkCard('pruebas', { n: 4 })}
+      ${wkCard('portadas')}
+      <div class="card"><h2 style="margin-top:0">🧭 ¿Quién trabaja en cada lugar?</h2>
+        <table class="t" style="width:100%">
+          <tr><td>Crear la cara de tu prota (Laboratorio)</td><td>🎨 El Artista Caro</td></tr>
+          <tr><td>Probar poses e ideas</td><td>✏️ El de Pruebas</td></tr>
+          <tr><td>Enseñar la cara (entrenar)</td><td>🧑‍🏫 El Maestro</td></tr>
+          <tr><td>Paneles de los capítulos</td><td>👷 El Obrero</td></tr>
+          <tr><td>Hoja de modelo y cambios de look</td><td>👷 El Obrero (o 🎨 si aún no aprende)</td></tr>
+          <tr><td>Portada sin letras (2K)</td><td>🎨 El Artista Caro</td></tr>
+          <tr><td>Portada con título</td><td>🔤 El de Portadas</td></tr>
+        </table>
+        <label class="f" style="margin-top:12px">💱 Dólar a pesos (para calcular en MXN)<input type="number" step="0.1" id="wkRate" value="${mxnRate()}"></label>
+        <label class="row nw small" style="margin-top:6px"><input type="checkbox" id="wkOn" ${wkOn() ? 'checked' : ''}> Usar a mis trabajadores (si lo apagas, la app usa el modelo de Configuración como antes)</label></div>
+    </div>
+    ${caps.length ? `<div class="sect panelbox" style="margin-top:14px"><h2>📖 Gasto por capítulo (${esc(m.name)})</h2><table class="t">${caps.map(c => `<tr><td>Cap ${c.number} · ${esc(c.title || '')}</td><td style="text-align:right"><b>${mx(c.falSpent)}</b></td></tr>`).join('')}</table></div>` : ''}
+    <p class="tiny dim" style="margin-top:14px">Precios de las páginas de Fal.ai. Fal.ai es quien cobra; aquí ves un cálculo hecho por la app.</p>`;
+};
+function wkMount() {
+  if (Route.view !== 'trabajadores') return;
+  const r = $('#wkRate'); if (r) r.onchange = () => { S.settings.mxnRate = Number(r.value) || 17; saveSettings(); render(); };
+  const o = $('#wkOn'); if (o) o.onchange = () => { S.settings.useWorkers = o.checked; saveSettings(); toast(o.checked ? 'Tus trabajadores están activos 👷' : 'Trabajadores apagados'); };
+  falSaldo(true).then(b => { const el = $('#wkSaldo'); if (!el) return; el.innerHTML = b ? mx(Math.max(0, b.usd)) : '—'; $('#wkSaldoNote').textContent = b ? `${usdTxt(Math.max(0, b.usd))} · ${b.real ? 'saldo real de tu cuenta de Fal.ai' : 'cálculo con lo que anotaste menos lo gastado'}` : (S.user ? 'No pude leer tu saldo de Fal.ai. Anota lo que recargaste y yo voy restando.' : 'Inicia sesión para ver tu saldo.'); });
+}
+ACT.wkSaldoSet = async () => {
+  const v = await promptBox('💳 Mi saldo en Fal.ai', String(S.settings.saldo?.usd ?? ''), { label: '¿Cuánto saldo tienes ahorita en Fal.ai? (en dólares, como sale en fal.ai)' });
+  if (v == null || v === '') return; const n = Number(String(v).replace(/[^0-9.]/g, '')); if (!(n >= 0)) return toast('Escribe solo el número, ej. 10', 'err');
+  S.settings.saldo = { usd: n, spentAt: falSpentTotal(), at: Date.now() }; BAL = null; saveSettings(); render(); toast('Listo, desde aquí voy restando lo que gastes ✔', 'ok');
+};
 
 </script>
 </body>

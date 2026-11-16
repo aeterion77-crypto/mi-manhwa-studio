@@ -22,7 +22,7 @@ async function getKey(uid: string, provider: string): Promise<string | null> {
   return data?.api_key ?? null;
 }
 
-const APP_RE = /^fal-ai\/[A-Za-z0-9_\-\/.]+$/;
+const APP_RE = /^(fal-ai|blackforestlabs)\/[A-Za-z0-9_\-\/.]+$/;
 const safeSeg = (s: unknown) => String(s ?? "x").replace(/[^A-Za-z0-9_\-]/g, "").slice(0, 64) || "x";
 
 function falUrlOk(u: unknown): u is string {
@@ -103,6 +103,16 @@ Deno.serve(async (req) => {
       if (!r.ok) return json({ error: data?.error?.message || "Error de Claude", status: r.status }, 502);
       const text = (data.content || []).filter((c: any) => c.type === "text").map((c: any) => c.text).join("");
       return json({ text, usage: data.usage, stop_reason: data.stop_reason, model: data.model });
+    }
+
+    // ---------- Fal.ai: tu saldo real ----------
+    if (action === "falBalance") {
+      const key = await getKey(uid, "fal");
+      if (!key) return json({ error: "Falta tu API key de Fal.ai." }, 400);
+      const r = await fetch("https://api.fal.ai/v1/account/billing?expand=credits", { headers: { Authorization: `Key ${key}` } });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) return json({ error: `Fal.ai respondió ${r.status}`, status: r.status }, 502);
+      return json({ balance: data?.credits?.current_balance ?? null, currency: data?.credits?.currency || "USD" });
     }
 
     // ---------- Fal.ai: precios en vivo ----------

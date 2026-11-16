@@ -371,6 +371,7 @@ function render() {
   $('#view').innerHTML = html;
   renderSide();
   hydrateImages($('#view'));
+  if (typeof wkMount === 'function') wkMount();
   const after = AFTER[Route.view]; if (after) try { after(); } catch (e) { console.error(e); }
   window.scrollTo({ top: 0 });
 }
@@ -410,9 +411,11 @@ function renderSide() {
     }
   }
   h += `<div class="navsec">Estudio</div>`;
+  h += n('#/trabajadores', '👷', 'Mis 4 trabajadores', 'trabajadores');
   h += n('#/config', '⚙️', 'Configuración', 'config');
   if (typeof isStandalone === 'function' && !isStandalone()) h += `<a class="nav" data-a="installApp" style="${INSTALL_EVT ? 'color:var(--neon);font-weight:700' : ''}"><span class="ic">📲</span>Instalar app</a>`;
   h += `<a class="nav" data-a="ccOpen"><span class="ic">🔌</span>Claude Code: ${CC.ok ? '<b style="color:var(--ok)">SÍ</b>' : 'NO'}</a>`;
+  if (typeof falSpentMonth === 'function') h += `<a class="nav" data-a="go" data-to="#/trabajadores" style="margin-top:10px;border:1px solid var(--line);flex-direction:column;align-items:flex-start;gap:2px"><span class="tiny dim">💸 Este mes has gastado</span><b style="color:var(--neon)">${mx(falSpentMonth())} en Fal.ai</b></a>`;
   h += `<div style="margin-top:auto;padding:16px 10px 0" class="tiny dim">${S.user ? '☁️ ' + esc(S.user.email) : '💾 Modo local (inicia sesión para sincronizar)'}</div>`;
   $('#side').innerHTML = h;
 }
