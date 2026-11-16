@@ -296,3 +296,6 @@ input[type=radio],input[type=checkbox]{width:20px;min-height:20px;height:20px;fl
 .sttxt{width:100%;min-height:380px;font-family:Georgia,'Times New Roman',serif;font-size:17px;line-height:1.7;padding:16px;resize:vertical}
 .sttxt::selection{background:rgba(180,77,255,.45)}
 .wktip{display:flex;gap:10px;align-items:center;background:rgba(180,77,255,.07);border:1px dashed rgba(180,77,255,.45);border-radius:12px;padding:8px 12px;margin:8px 0 12px}
+
+.gxdiff{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:4px}.gxb,.gxa{padding:6px 8px;border-radius:8px;white-space:pre-wrap;word-break:break-word}.gxb{background:rgba(255,80,80,.10);text-decoration:line-through;opacity:.8}.gxa{background:rgba(60,220,140,.12)}
+@media(max-width:700px){.gxdiff{grid-template-columns:1fr}}

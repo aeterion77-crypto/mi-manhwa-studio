@@ -319,6 +319,9 @@ input[type=radio],input[type=checkbox]{width:20px;min-height:20px;height:20px;fl
 .sttxt::selection{background:rgba(180,77,255,.45)}
 .wktip{display:flex;gap:10px;align-items:center;background:rgba(180,77,255,.07);border:1px dashed rgba(180,77,255,.45);border-radius:12px;padding:8px 12px;margin:8px 0 12px}
 
+.gxdiff{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:4px}.gxb,.gxa{padding:6px 8px;border-radius:8px;white-space:pre-wrap;word-break:break-word}.gxb{background:rgba(255,80,80,.10);text-decoration:line-through;opacity:.8}.gxa{background:rgba(60,220,140,.12)}
+@media(max-width:700px){.gxdiff{grid-template-columns:1fr}}
+
 </style>
 </head>
 <body>
@@ -890,6 +893,7 @@ function brain(m, { maxChars = 50000, skipChapterId = null } = {}) {
   if (b.synopsis) L.push(`Sinopsis: ${b.synopsis}`);
   if (b.plot) L.push(`Trama completa: ${b.plot}`);
   if (b.rules) L.push(`Reglas del mundo: ${b.rules}`);
+  if (b.extras) L.push(`Otros apuntes del autor:\n${String(b.extras).slice(0, 15000)}`);
   const ent = (title, arr, fn) => { if (arr?.length) { L.push(`\n## ${title}`); arr.forEach(x => L.push('- ' + fn(x))); } };
   const nm = id => findEntity(m, id)?.name || '?';
   ent('PERSONAJES', m.characters, c => [c.name, c.nickname && `apodo "${c.nickname}"`, c.age && `${c.age} años`, c.role, c.status && `estado: ${c.status}`, c.power && `poder: ${c.power}`, c.weakness && `debilidad: ${c.weakness}`, c.trauma && `trauma: ${c.trauma}`, c.goal && `objetivo: ${c.goal}`, c.appearance && `apariencia: ${c.appearance}`, (c.relations || []).length && 'relaciones: ' + c.relations.map(r => `${r.kind} de ${nm(r.target)}`).join(', ')].filter(Boolean).join(' · '));
@@ -1059,6 +1063,7 @@ VIEWS.biblia = () => {
   return `<div class="head"><div><h1>🧠 ${esc(m.name)}</h1><p class="muted">La Biblia es la memoria total de este manhwa. Todo lo que escribas aquí lo usa la IA.</p></div>
     <div class="row"><button class="pri" data-a="importBible">📄 SUBIR MI BIBLIA (Word / PDF)</button><button class="pri" data-a="dlBible">📥 DESCARGAR MI BIBLIA (Word)</button><button class="pri" data-a="dlAll">📦 DESCARGAR TODO</button><button data-a="dlBibleOnly">⬇ Solo historia</button><button data-a="go" data-to="${mlink(m, 'caps')}">📖 Capítulos (${caps.length})</button><button data-a="go" data-to="${mlink(m, 'lector', 'novela')}">🎧 Leer como novela</button></div></div>
     <div class="alert info small" style="margin-bottom:14px"><div>📄 ¿Ya tienes tu biblia escrita? Súbela en Word (.docx), PDF o texto y reparto todo solo: historia, personajes, lugares, poderes, objetos, facciones, línea de tiempo y fichas canon. Tú revisas y apruebas antes de guardar.<br>📥 <b>Descargar mi biblia</b> crea un Word siempre actualizado con todo lo que tienes en la app (con fotos y LoRAs). <b>Descargar todo</b> agrega imágenes, videos, audios y archivos LoRA en un .zip. Cada personaje, lugar, sección, capítulo, imagen y video también tiene su propio botón ⬇.</div></div>
+    ${typeof gxHTML === 'function' ? gxHTML(m) : ''}
     <div class="grid2">
       <div class="panelbox"><h2>Historia</h2>
         <label class="f">Nombre del manhwa<input ${bindAttr(m, 'name')} value="${esc(m.name)}"></label>
@@ -1066,6 +1071,8 @@ VIEWS.biblia = () => {
         <label class="f">Sinopsis<textarea ${bindAttr(b, 'synopsis')}>${esc(b.synopsis)}</textarea></label>
         <label class="f">Trama completa<textarea style="min-height:160px" ${bindAttr(b, 'plot')}>${esc(b.plot)}</textarea></label>
         <label class="f">Reglas del mundo<textarea style="min-height:120px" ${bindAttr(b, 'rules')}>${esc(b.rules)}</textarea></label>
+        <label class="f">🗂️ Otros apuntes (todo lo demás de tu biblia: temas, arcos, glosario, notas)<textarea style="min-height:120px" ${bindAttr(b, 'extras')}>${esc(b.extras || '')}</textarea></label>
+        ${(b.sources || []).length ? `<div class="small" style="margin-top:6px"><b>📄 Mis documentos originales</b>${b.sources.map(d => `<div class="row nw between" style="border-top:1px solid var(--line);padding:4px 0"><span>${esc(d.name)} <span class="muted">· ${fmtDate(d.at)} · ${Math.round(d.text.length / 1000)}k caracteres</span></span><span class="row nw"><button class="sm" data-a="srcView" data-id="${d.id}">👁 Ver</button><button class="sm" data-a="srcDl" data-id="${d.id}">⬇</button><button class="sm icon danger" data-a="srcDel" data-id="${d.id}">🗑️</button></span></div>`).join('')}</div>` : ''}
         <label class="f">Protagonista (para portadas)<select ${bindAttr(b, 'protagonistId')}><option value="">—</option>${m.characters.map(c => `<option value="${c.id}" ${b.protagonistId === c.id ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}</select></label>
       </div>
       <div class="col">
@@ -4664,8 +4671,11 @@ Devuelve SOLO este JSON:
  "objects": [{${f('objetos')}}],
  "factions": [{${f('facciones')}}],
  "timeline": [{${f('historia')}}],
- "canon": [{"entity":"quién o qué","attribute":"atributo corto (cicatriz, color de ojos, edad, estado…)","value":"valor","since":número de capítulo o null}]
+ "canon": [{"entity":"quién o qué","attribute":"atributo corto (cicatriz, color de ojos, edad, estado…)","value":"valor","since":número de capítulo o null}],
+ "chapters": [{"number":número,"title":"","premise":"qué pasa en ese capítulo, completo"}],
+ "extras": [{"title":"de qué trata","text":"el texto COPIADO tal cual del documento"}]
 }
+MUY IMPORTANTE: NADA del documento debe quedar fuera. Si el autor tiene un plan o resumen de capítulos, ponlo en "chapters". Todo lo que no quepa en otra sección (temas, arcos, glosario, notas, ideas sueltas, referencias, estilo de dibujo, cualquier otra cosa) va en "extras", copiado tal cual.
 En "canon" pon solo hechos físicos o fijos importantes que no deben cambiar (marcas, colores, edades, quién murió y en qué capítulo, etc.).
 
 DOCUMENTO:
@@ -4673,7 +4683,8 @@ ${text}`;
 }
 function splitDoc(text, max) { if (text.length <= max) return [text]; const out = []; let i = 0; while (i < text.length) { let e = Math.min(text.length, i + max); if (e < text.length) { const p = text.lastIndexOf('\n\n', e); if (p > i + max * 0.5) e = p; } out.push(text.slice(i, e)); i = e; } return out; }
 function mergeImport(a, b) {
-  const out = { bible: { ...a.bible }, canon: [...(a.canon || []), ...(b.canon || [])] };
+  const out = { bible: { ...a.bible }, canon: [...(a.canon || []), ...(b.canon || [])], extras: [...(a.extras || []), ...(b.extras || [])], chapters: [...(a.chapters || [])] };
+  for (const c of b.chapters || []) { const same = out.chapters.find(x => Number(x.number) === Number(c.number) && c.number != null); if (same) { if (c.premise) same.premise = same.premise ? same.premise + '\n' + c.premise : c.premise; same.title ||= c.title; } else out.chapters.push(c); }
   for (const [k, v] of Object.entries(b.bible || {})) if (v) out.bible[k] = out.bible[k] && out.bible[k] !== v ? out.bible[k] + '\n\n' + v : v;
   for (const key of ['characters', 'places', 'powers', 'objects', 'factions', 'timeline']) {
     const list = [...(a[key] || [])];
@@ -4728,16 +4739,17 @@ async function runImport(m, text, fname, status, btn, bg) {
       res = mergeImport(res, r);
     }
     clearInterval(timer);
-    const n = ['characters', 'places', 'powers', 'objects', 'factions', 'timeline', 'canon'].reduce((a, k) => a + (res[k] || []).length, 0);
+    const n = ['characters', 'places', 'powers', 'objects', 'factions', 'timeline', 'canon', 'chapters', 'extras'].reduce((a, k) => a + (res[k] || []).length, 0);
     if (!n && !Object.values(res.bible || {}).some(Boolean)) { status('⚠️ Claude no encontró nada que acomodar. Revisa que el texto sea tu biblia e intenta de nuevo.', 'bad'); return; }
-    bg.close(); showImportReview(m, res, fname);
+    bg.close(); showImportReview(m, res, fname, text);
   } catch (e) {
     clearInterval(timer);
     status(e.message === 'Cancelado' ? 'Cancelado.' : '⚠️ ' + esc(e.message) + '<br><span class="tiny">Intenta otra vez. Si sigue fallando, mándame una captura de este mensaje.</span>', e.message === 'Cancelado' ? '' : 'bad');
   } finally { btn.disabled = false; }
 }
 const IMPORT_SECTIONS = [['characters', 'personajes'], ['places', 'lugares'], ['powers', 'poderes'], ['objects', 'objetos'], ['factions', 'facciones'], ['timeline', 'historia']];
-function showImportReview(m, res, fname) {
+function showImportReview(m, res, fname, srcText = '') {
+  const extras = (res.extras || []).filter(x => x && (x.text || '').trim()); const caps = (res.chapters || []).filter(x => x && (x.premise || x.title));
   const rows = []; // {sec, t, e, dupe, mode}
   for (const [key, t] of IMPORT_SECTIONS) for (const e of res[key] || []) { if (!e?.name) continue; const dupe = (m[TYPES[t].key] || []).find(x => norm(x.name) === norm(e.name)); rows.push({ key, t, e, dupe, mode: dupe ? 'merge' : 'new' }); }
   const canon = (res.canon || []).filter(f => f.entity && f.attribute && f.value).map(f => ({ ...f, dupe: m.canon.some(c => norm(c.entity) === norm(f.entity) && norm(c.attribute) === norm(f.attribute)) }));
@@ -4747,6 +4759,9 @@ function showImportReview(m, res, fname) {
     <div class="row">${sum.map(([T, n]) => `<span class="chip neon">${T.icon} ${n} ${T.label.toLowerCase()}</span>`).join('')}${canon.length ? `<span class="chip">📌 ${canon.length} fichas canon</span>` : ''}${bibleF.length ? `<span class="chip">🧠 ${bibleF.length} partes de la Biblia</span>` : ''}</div>
     <p class="small muted">Nada se guarda hasta que tú lo apruebes. Desmarca lo que no quieras. Si algo ya existe, elige si completarlo, reemplazarlo u omitirlo.</p>
     <div class="col" style="gap:10px;max-height:56vh;overflow:auto">
+      ${caps.length ? `<div class="panelbox"><h3>📖 Plan de capítulos (${caps.length})</h3>${caps.map((c, i) => `<label class="row nw small"><input type="checkbox" data-capi="${i}" checked><span><b>Cap ${esc(c.number ?? '?')}${c.title ? ' · ' + esc(c.title) : ''}</b> <span class="muted">${esc(String(c.premise || '').slice(0, 140))}</span>${chapterByNum(m, c.number) ? ' <span class="chip warn">ya existe → completo lo vacío</span>' : ''}</span></label>`).join('')}</div>` : ''}
+      ${extras.length ? `<div class="panelbox"><h3>🗂️ Otros apuntes (${extras.length})</h3><p class="tiny dim">Lo que no cabe en otra sección. Se guarda en “Otros apuntes” de tu Biblia y Claude lo usa.</p>${extras.map((x, i) => `<label class="row nw small"><input type="checkbox" data-ext="${i}" checked><span><b>${esc(x.title || 'Apunte')}</b> <span class="muted">${esc(String(x.text).slice(0, 140))}</span></span></label>`).join('')}</div>` : ''}
+      ${srcText ? `<div class="alert ok small"><div>📄 Tu documento original completo (${srcText.length.toLocaleString('es')} caracteres) también se guarda tal cual en tu Biblia, para que nada se pierda.</div></div>` : ''}
       ${bibleF.length ? `<div class="panelbox"><h3>🧠 Biblia</h3>${bibleF.map(([k, l]) => `<label class="row nw small"><input type="checkbox" data-bib="${k}" checked><div class="grow"><b>${l}</b>${m.bible[k] ? ' <span class="chip warn">ya tienes texto: se agrega al final</span>' : ''}<div class="muted">${esc(String(res.bible[k]).slice(0, 220))}${String(res.bible[k]).length > 220 ? '…' : ''}</div></div></label>`).join('')}</div>` : ''}
       ${IMPORT_SECTIONS.map(([key, t]) => { const rs = rows.filter(r => r.key === key); if (!rs.length) return ''; const T = TYPES[t];
         return `<div class="panelbox"><div class="row between"><h3>${T.icon} ${T.label} (${rs.length})</h3><button class="sm ghost" data-allsec="${key}">Marcar / desmarcar todos</button></div>${rs.map(r => { const i = rows.indexOf(r); const sub = entSub(t, r.e); return `<div class="row nw between small" style="border-top:1px solid var(--line);padding-top:6px"><label class="row nw grow"><input type="checkbox" data-row="${i}" data-sec="${key}" checked><div><b>${esc(r.e.name)}</b> <span class="muted">${esc(sub.slice(0, 120))}</span></div></label>${r.dupe ? `<select data-mode="${i}" style="width:auto;min-height:34px;padding:4px 8px"><option value="merge">Ya existe → completar lo vacío</option><option value="replace">Ya existe → reemplazar</option><option value="new">Crear otro aparte</option></select>` : '<span class="chip ok">nuevo</span>'}</div>`; }).join('')}</div>`; }).join('')}
@@ -4773,6 +4788,9 @@ function showImportReview(m, res, fname) {
     const all = Object.keys(TYPES).flatMap(k => m[TYPES[k].key] || []);
     for (const { target, rels } of created) for (const rl of rels) { const o = all.find(x => norm(x.name) === norm(rl.name)); if (o && o !== target && !(target.relations ||= []).some(x => x.target === o.id)) target.relations.push({ target: o.id, kind: REL_KINDS.includes(rl.kind) ? rl.kind : 'otro', note: rl.note || '' }); }
     bg.querySelectorAll('[data-canon]').forEach(c => { if (!c.checked) return; const f = canon[+c.dataset.canon]; m.canon.push({ id: uid('k_'), entity: f.entity, attribute: f.attribute, value: f.value, since: Number(f.since) || '', note: 'De la biblia importada' }); counts['Fichas canon'] = (counts['Fichas canon'] || 0) + 1; });
+    bg.querySelectorAll('[data-capi]').forEach(cb => { if (!cb.checked) return; const x = caps[+cb.dataset.capi]; const num = Number(x.number) || ((chapterList(m).at(-1)?.number || 0) + 1); let ch = chapterByNum(m, num); if (ch) { if (!ch.premise) ch.premise = x.premise || ''; if (!ch.title) ch.title = x.title || ''; } else { ch = newChapter(m, num, x.title || '', x.premise || ''); m.chapters.push(ch); } counts['Capítulos'] = (counts['Capítulos'] || 0) + 1; });
+    const ex = [...bg.querySelectorAll('[data-ext]')].filter(cb => cb.checked).map(cb => extras[+cb.dataset.ext]); if (ex.length) { m.bible.extras = [m.bible.extras, ...ex.map(x => `## ${x.title || 'Apunte'}\n${String(x.text).trim()}`)].filter(Boolean).join('\n\n'); counts['Apuntes'] = ex.length; }
+    if (srcText) { (m.bible.sources ||= []).push({ id: uid('doc_'), name: fname, text: srcText, at: Date.now() }); counts['Documento original'] = 1; }
     if (!Object.keys(counts).length) return toast('No marcaste nada', 'err');
     if (m.sample) m.sampleTouched = true;
     touch(m); bg.close(); render();
@@ -4845,7 +4863,7 @@ async function sectionBlocks(m, t, { images = true } = {}) {
   return out;
 }
 function canonBlocks(m) { const { H, KV } = D(); const out = [H('Fichas canon', 1)]; const by = {}; m.canon.forEach(f => (by[f.entity || '—'] ||= []).push(f)); for (const [ent, fs] of Object.entries(by)) { out.push(H(ent, 3)); out.push(...KV(fs.map(f => [f.attribute || '—', `${f.value}${f.since ? '  (desde Cap ' + f.since + ')' : ''}${f.note ? '  — ' + f.note : ''}`]))); } return out; }
-function bibleBlocks(m) { const { H, KV } = D(); const b = m.bible; return [H('Historia', 1), ...KV([['Género', b.genre], ['Tono', b.tone], ['Sinopsis', b.synopsis], ['Trama completa', b.plot], ['Reglas del mundo', b.rules], ['Protagonista', b.protagonistId ? nameOf(m, b.protagonistId) : '']]), H('Estilo de imágenes', 2), ...KV([['Modelo', b.style.model], ['Pasos', b.style.steps], ['CFG', b.style.cfg], ['Tamaño', `${b.style.width}×${b.style.height}`], ['Prompt de estilo', b.style.prefix], ['Prompt negativo', b.style.negative]])]; }
+function bibleBlocks(m) { const { H, KV } = D(); const b = m.bible; return [H('Historia', 1), ...KV([['Género', b.genre], ['Tono', b.tone], ['Sinopsis', b.synopsis], ['Trama completa', b.plot], ['Reglas del mundo', b.rules], ['Otros apuntes', b.extras], ['Protagonista', b.protagonistId ? nameOf(m, b.protagonistId) : '']]), H('Estilo de imágenes', 2), ...KV([['Modelo', b.style.model], ['Pasos', b.style.steps], ['CFG', b.style.cfg], ['Tamaño', `${b.style.width}×${b.style.height}`], ['Prompt de estilo', b.style.prefix], ['Prompt negativo', b.style.negative]])]; }
 async function chapterBlocks(m, c, { script = true, images = false } = {}) {
   const { H, P, KV, IMG } = D(); const out = [H(`Capítulo ${c.number}${c.title ? ': ' + c.title : ''}`, 1), ...KV([['Estado', c.status], ['Premisa', c.premise], ['Resumen', c.summary]])];
   if (script && c.panels?.length) {
@@ -5281,6 +5299,156 @@ function wkTip(k, txt) {
   const W = WK[k];
   return `<div class="wktip"><span style="font-size:22px">${W.icon}</span><div class="grow small">Aquí trabaja <b>${W.name}</b>: ${txt}</div><a class="tiny" data-a="go" data-to="#/trabajadores" style="cursor:pointer;white-space:nowrap">ver los 4 →</a></div>`;
 }
+
+/* =====================================================================
+   🪄 CAMBIAR ALGO EN TODO MI MANHWA
+   Le dices a Claude el cambio como en un chat ("Kael ahora tiene 19 años",
+   "el maná ahora se llama aura", "Lira no muere en el cap 5") y la app busca
+   TODO lo afectado: biblia, personajes, lugares, poderes, fichas canon,
+   capítulos, texto escrito, versión novela, paneles y diálogos.
+   Tú revisas cada cambio y lo apruebas. Se puede deshacer.
+   ===================================================================== */
+const GX_STOP = new Set('ahora este esta estos estas pero para como cuando donde porque sobre entre desde hasta tiene tienen ser será sera quiero cambia cambiar cambio todo todos toda todas también tambien solo más mas menos ella ellos ellas mismo misma capítulo capitulo cap personaje lugar poder historia manhwa biblia nuevo nueva hace hacer debe deben llama llamar'.split(' '));
+function gxKeywords(m, q) {
+  const words = new Set((q.match(/[\p{L}\d]{4,}/gu) || []).map(w => w.toLowerCase()).filter(w => !GX_STOP.has(w)));
+  for (const k of Object.keys(TYPES)) for (const e of m[TYPES[k].key] || []) if (e.name && norm(q).includes(norm(e.name))) { words.add(e.name.toLowerCase()); (e.nickname || '').split(/[,\s]+/).filter(x => x.length > 2).forEach(x => words.add(x.toLowerCase())); }
+  return [...words];
+}
+const gxHit = (txt, kw) => { const t = norm(txt || ''); return kw.some(k => t.includes(norm(k))); };
+/* Todo lo editable del manhwa, con su "dirección" */
+function gxFields(m) {
+  const F = []; const add = (p, l, v, long = false) => { if (v != null && String(v).trim() !== '') F.push({ p, l, v: String(v), long }); };
+  const b = m.bible; [['synopsis', 'Sinopsis'], ['plot', 'Trama completa'], ['rules', 'Reglas del mundo'], ['genre', 'Género'], ['tone', 'Tono'], ['extras', 'Otros apuntes']].forEach(([k, l]) => add('bible.' + k, 'Biblia · ' + l, b[k], ['plot', 'extras'].includes(k)));
+  for (const t of Object.keys(TYPES)) { const T = TYPES[t]; for (const e of m[T.key] || []) for (const [k, l] of T.fields) if (!['loraId', 'loraWeight'].includes(k)) add(`ent.${e.id}.${k}`, `${T.icon} ${e.name} · ${l}`, e[k]); }
+  for (const f of m.canon || []) { add(`canon.${f.id}.entity`, `📌 Ficha canon · quién`, f.entity); add(`canon.${f.id}.attribute`, `📌 ${f.entity} · atributo`, f.attribute); add(`canon.${f.id}.value`, `📌 ${f.entity} · ${f.attribute}`, f.value); add(`canon.${f.id}.note`, `📌 ${f.entity} · nota`, f.note); }
+  for (const c of chapterList(m)) {
+    const cl = `📖 Cap ${c.number}`;
+    add(`cap.${c.id}.title`, cl + ' · Título', c.title); add(`cap.${c.id}.premise`, cl + ' · Idea', c.premise); add(`cap.${c.id}.summary`, cl + ' · Resumen', c.summary);
+    add(`cap.${c.id}.story`, cl + ' · Texto escrito', c.story?.text, true); add(`cap.${c.id}.novel`, cl + ' · Versión novela', c.novel, true);
+    (c.panels || []).forEach((p, i) => {
+      const pl = `${cl} · Panel ${i + 1}`;
+      add(`pan.${c.id}.${p.id}.description`, pl + ' · descripción', p.description); add(`pan.${c.id}.${p.id}.prompt_en`, pl + ' · prompt de imagen', p.prompt_en);
+      add(`pan.${c.id}.${p.id}.characters`, pl + ' · personajes', (p.characters || []).join(', '));
+      (p.dialogues || []).forEach((d, j) => { add(`pan.${c.id}.${p.id}.d${j}`, `${pl} · diálogo de ${d.who || '—'}`, d.text); add(`pan.${c.id}.${p.id}.w${j}`, `${pl} · quién habla`, d.who); });
+    });
+  }
+  return F;
+}
+function gxGet(m, path) { return gxFields(m).find(f => f.p === path)?.v ?? ''; }
+function gxSet(m, path, val) {
+  const [kind, a, b, c] = path.split('.');
+  if (kind === 'bible') { m.bible[a] = val; return true; }
+  if (kind === 'ent') { const e = findEntity(m, a); if (!e) return false; const T = TYPES[findEntityType(m, a)]; const ty = T.fields.find(f => f[0] === b)?.[2]; e[b] = ty === 'num' ? (Number(val) || 0) : val; return true; }
+  if (kind === 'canon') { const f = m.canon.find(x => x.id === a); if (!f) return false; f[b] = val; return true; }
+  const ch = chapterById(m, a); if (!ch) return false;
+  if (kind === 'cap') { if (b === 'story') story(ch).text = val; else ch[b] = val; return true; }
+  if (kind === 'pan') {
+    const p = ch.panels.find(x => x.id === b); if (!p) return false;
+    if (c === 'characters') p.characters = val.split(',').map(s => s.trim()).filter(Boolean);
+    else if (/^[dw]\d+$/.test(c)) { const d = p.dialogues[+c.slice(1)]; if (!d) return false; d[c[0] === 'd' ? 'text' : 'who'] = val; }
+    else p[c] = val;
+    p.approved = false; return true;
+  }
+  return false;
+}
+const reEsc = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const wordRe = w => new RegExp(`(?<![\\p{L}\\d])${reEsc(w)}(?![\\p{L}\\d])`, 'gu');
+/* el pedido para Claude: lo estructurado completo + lo largo solo donde se menciona */
+function gxPrompt(m, q) {
+  const kw = gxKeywords(m, q); let size = 0; const L = [];
+  for (const f of gxFields(m)) {
+    if (f.long) {
+      const paras = f.v.split(/\n\s*\n/); const hits = paras.map((t, i) => [i, t]).filter(([, t]) => gxHit(t, kw));
+      if (!hits.length) continue; const chunk = hits.slice(0, 25).map(([i, t]) => `  [párrafo ${i + 1}] ${t.slice(0, 1500)}`).join('\n');
+      if (size + chunk.length > 140000) continue; L.push(`${f.p} | ${f.l} (solo los párrafos que mencionan el tema; usa "replace"):\n${chunk}`); size += chunk.length;
+    } else {
+      if (f.p.startsWith('pan.') && !gxHit(f.v, kw)) continue;
+      const line = `${f.p} | ${f.l} = ${f.v.slice(0, 2000)}`; if (size + line.length > 160000) continue; L.push(line); size += line.length;
+    }
+  }
+  return `Eres el editor de continuidad del manhwa "${m.name}". El autor quiere hacer este CAMBIO en su historia:
+«${q}»
+
+Encuentra TODO lo que hay que modificar para que el cambio quede igual en todos lados (biblia, fichas de personajes/lugares/poderes, fichas canon, capítulos, texto escrito, versión novela, paneles, diálogos, prompts de imagen en inglés) y propón cada modificación. Cambia SOLO lo necesario y conserva el estilo del autor. No inventes cosas que el autor no pidió. Si el cambio contradice algo importante o hay algo que no queda claro, dilo en "dudas".
+
+AQUÍ ESTÁ TODO LO QUE TIENE EL MANHWA (formato: dirección | qué es = valor):
+${L.join('\n')}
+
+Operaciones posibles:
+- {"path":"dirección","op":"set","value":"nuevo valor completo","why":"motivo corto"}  → para campos cortos
+- {"path":"dirección","op":"replace","find":"texto EXACTO que existe en ese campo","replace":"texto nuevo","why":""}  → para textos largos (copia "find" exacto)
+- {"op":"rename","from":"palabra o nombre exacto","to":"nuevo","why":""}  → si es un cambio de nombre o palabra que debe cambiar en TODO el manhwa (la app lo cambia en todos lados, incluso donde no te mostré)
+- {"op":"canon","entity":"quién","attribute":"atributo","value":"valor","why":""}  → nueva ficha canon si el cambio es un hecho fijo importante
+
+Responde SOLO con JSON:
+{"entendi":"qué entendiste del cambio, 1 frase","cambios":[…],"dudas":"vacío si no hay"}`;
+}
+/* rename: cuántos lugares lo tienen */
+function gxRenameHits(m, from) { const re = wordRe(from); return gxFields(m).filter(f => { re.lastIndex = 0; return re.test(f.v); }); }
+async function gxSnapshot(m) { const k = 'gundo_' + m.id; const arr = (await IDB.get('kv', k)) || []; arr.push({ at: Date.now(), data: JSON.stringify(m) }); while (arr.length > 5) arr.shift(); await IDB.put('kv', k, arr); }
+ACT.gxRun = async el => {
+  const m = cur(); const q = ($('#gxQ')?.value || '').trim();
+  if (q.length < 4) return toast('Escribe el cambio que quieres, como si me lo dijeras en el chat', 'err');
+  let r; await busy(el, async () => { r = await aiJSON(gxPrompt(m, q), { max_tokens: 16000, temperature: 0.2, title: 'Cambiar en todo mi manhwa' }); }, 'Buscando en todo…');
+  if (!r) return; gxReview(m, q, r);
+};
+function gxReview(m, q, r) {
+  const items = [];
+  for (const x of r.cambios || []) {
+    if (x.op === 'rename' && x.from && x.to && x.from !== x.to) { const hits = gxRenameHits(m, x.from); if (hits.length) items.push({ ...x, label: `🔁 Cambiar “${x.from}” por “${x.to}” en TODO`, list: true, before: hits.slice(0, 6).map(h => h.l).join(' · ') + (hits.length > 6 ? ` · y ${hits.length - 6} más` : ''), after: `${hits.length} lugares` }); continue; }
+    if (x.op === 'canon' && x.entity && x.attribute) { items.push({ ...x, label: `📌 Nueva ficha canon: ${x.entity} · ${x.attribute}`, before: '—', after: x.value }); continue; }
+    const f = gxFields(m).find(ff => ff.p === x.path); if (!f) continue;
+    if (x.op === 'replace') { if (!x.find || !f.v.includes(x.find) || x.find === x.replace) continue; items.push({ ...x, label: f.l, before: x.find, after: x.replace }); }
+    else if (x.op === 'set') { if (String(x.value ?? '') === f.v) continue; items.push({ ...x, label: f.l, before: f.v, after: String(x.value ?? '') }); }
+  }
+  const cut = s => esc(String(s).length > 400 ? String(s).slice(0, 400) + '…' : s);
+  const bg = modal(`<h2>🪄 Cambios para: “${esc(q)}”</h2>
+    ${r.entendi ? `<p class="small"><b>Entendí:</b> ${esc(r.entendi)}</p>` : ''}
+    ${r.dudas ? `<div class="alert warn small"><div><b>Ojo:</b> ${esc(r.dudas)}</div></div>` : ''}
+    ${items.length ? `<p class="small muted">${items.length} cambios. Desmarca los que no quieras. Los paneles que cambien quedan sin aprobar para que los revises antes de dibujarlos otra vez.</p>
+    <div style="max-height:58vh;overflow:auto">${items.map((it, i) => `<label class="row nw gxrow" style="align-items:flex-start;border-top:1px solid var(--line);padding:8px 0"><input type="checkbox" data-g="${i}" checked style="margin-top:4px"><div class="grow small"><b>${esc(it.label)}</b>${it.why ? ` <span class="tiny dim">· ${esc(it.why)}</span>` : ''}
+      ${it.list ? `<div class="tiny muted" style="margin-top:4px">📍 ${cut(it.before)} → <b>${cut(it.after)}</b></div>` : `<div class="gxdiff"><div class="gxb">${cut(it.before)}</div><div class="gxa">${cut(it.after)}</div></div>`}</div></label>`).join('')}</div>`
+      : '<div class="alert info"><div>Claude no encontró nada que cambiar. Intenta decirlo de otra forma o con más detalle.</div></div>'}
+    <div class="acts"><button data-x="no">Cancelar</button>${items.length ? '<button class="pri" data-x="ok">✔ HACER LOS CAMBIOS MARCADOS</button>' : ''}</div>`, { wide: true });
+  bg.querySelector('[data-x=no]').onclick = () => bg.remove();
+  const ok = bg.querySelector('[data-x=ok]'); if (!ok) return;
+  ok.onclick = async () => {
+    const sel = [...bg.querySelectorAll('[data-g]')].filter(c => c.checked).map(c => items[+c.dataset.g]); if (!sel.length) return toast('No marcaste ningún cambio', 'err');
+    await gxSnapshot(m); let n = 0; const touched = new Set();
+    for (const it of sel) {
+      if (it.op === 'rename') { const re = wordRe(it.from); for (const f of gxFields(m)) { re.lastIndex = 0; if (re.test(f.v)) { re.lastIndex = 0; if (gxSet(m, f.p, f.v.replace(re, it.to))) { n++; touched.add(f.p); } } } continue; }
+      if (it.op === 'canon') { m.canon.push({ id: uid('k_'), entity: it.entity, attribute: it.attribute, value: it.value, since: '', note: 'Por cambio: ' + q.slice(0, 80) }); n++; continue; }
+      const cur0 = gxGet(m, it.path);
+      if (it.op === 'replace') { if (cur0.includes(it.find)) { gxSet(m, it.path, cur0.split(it.find).join(it.replace)); n++; touched.add(it.path); } }
+      else if (gxSet(m, it.path, it.after)) { n++; touched.add(it.path); }
+    }
+    const pans = [...touched].filter(p => p.startsWith('pan.')).map(p => p.split('.').slice(1, 3).join('.')); const withImg = new Set(pans.filter(k => { const [c, p] = k.split('.'); return chapterById(m, c)?.panels.find(x => x.id === p)?.imageId; }));
+    (m.changeLog ||= []).unshift({ at: Date.now(), text: q, n }); m.changeLog = m.changeLog.slice(0, 30);
+    touch(m); bg.remove(); const qi = $('#gxQ'); if (qi) qi.value = ''; render();
+    toast(`🪄 Listo: ${n} cambios hechos en todo tu manhwa.${withImg.size ? ` ${withImg.size} paneles que ya tenían imagen quedaron sin aprobar (revísalos y vuelve a dibujarlos si quieres).` : ''} Puedes deshacerlo.`, 'ok');
+  };
+}
+ACT.gxUndo = async () => {
+  const m = cur(); const k = 'gundo_' + m.id; const arr = (await IDB.get('kv', k)) || []; const last = arr.pop();
+  if (!last) return toast('No hay cambios para deshacer', 'err');
+  if (!await confirmBox(`¿Deshacer el último cambio global (${fmtDate(last.at)})? Todo el manhwa regresa a como estaba antes de ese cambio.`, { ok: 'Deshacer', danger: false })) return;
+  const snap = JSON.parse(last.data); for (const key of Object.keys(m)) delete m[key]; Object.assign(m, snap); await IDB.put('kv', k, arr); touch(m); render(); toast('↩️ Deshecho', 'ok');
+};
+function gxHTML(m) {
+  const log = m.changeLog || [];
+  return `<div class="panelbox" style="margin-bottom:16px;border-color:var(--neon)">
+    <h2 style="margin-top:0">🪄 Cambiar algo en todo mi manhwa</h2>
+    <p class="small muted">Escríbelo como en el chat. Claude busca dónde aparece en tu biblia, personajes, lugares, poderes, fichas canon, capítulos, texto, versión novela, paneles y diálogos, y te muestra cada cambio para que lo apruebes.</p>
+    <textarea id="gxQ" style="min-height:80px" placeholder="Ej. “Kael ahora tiene 19 años y sus ojos son dorados”, “el maná ahora se llama aura”, “Lira no muere en el cap 5, solo queda herida”, “la Academia Umbra ahora se llama Academia Noctis”"></textarea>
+    <div class="row" style="margin-top:8px"><button class="pri" data-a="gxRun">🪄 Hacer el cambio en todos lados</button><button data-a="gxUndo">↩️ Deshacer el último</button></div>
+    ${log.length ? `<details style="margin-top:8px"><summary class="small muted">Cambios que has hecho (${log.length})</summary>${log.map(x => `<div class="small" style="padding:4px 0;border-top:1px solid var(--line)">${fmtDate(x.at)} · ${esc(x.text)} <span class="muted">(${x.n} cambios)</span></div>`).join('')}</details>` : ''}
+  </div>`;
+}
+
+/* documentos originales guardados */
+ACT.srcView = el => { const d = cur().bible.sources.find(x => x.id === el.dataset.id); const bg = modal(`<h2>📄 ${esc(d.name)}</h2><div style="white-space:pre-wrap;max-height:65vh;overflow:auto;font-family:Georgia,serif;line-height:1.6">${esc(d.text)}</div><div class="acts"><button class="pri" data-x="ok">Cerrar</button></div>`, { wide: true }); bg.querySelector('[data-x=ok]').onclick = () => bg.remove(); };
+ACT.srcDl = el => { const d = cur().bible.sources.find(x => x.id === el.dataset.id); downloadBlob(new Blob([d.text], { type: 'text/plain;charset=utf-8' }), fileSafe(d.name.replace(/\.[a-z0-9]+$/i, '')) + ' (original).txt'); };
+ACT.srcDel = async el => { const m = cur(); if (!await confirmBox('¿Borrar este documento original? (lo que ya se acomodó en tu Biblia no se borra)', { ok: 'Borrar' })) return; m.bible.sources = m.bible.sources.filter(x => x.id !== el.dataset.id); touch(m); render(); };
 
 </script>
 </body>

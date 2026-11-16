@@ -551,6 +551,7 @@ function brain(m, { maxChars = 50000, skipChapterId = null } = {}) {
   if (b.synopsis) L.push(`Sinopsis: ${b.synopsis}`);
   if (b.plot) L.push(`Trama completa: ${b.plot}`);
   if (b.rules) L.push(`Reglas del mundo: ${b.rules}`);
+  if (b.extras) L.push(`Otros apuntes del autor:\n${String(b.extras).slice(0, 15000)}`);
   const ent = (title, arr, fn) => { if (arr?.length) { L.push(`\n## ${title}`); arr.forEach(x => L.push('- ' + fn(x))); } };
   const nm = id => findEntity(m, id)?.name || '?';
   ent('PERSONAJES', m.characters, c => [c.name, c.nickname && `apodo "${c.nickname}"`, c.age && `${c.age} años`, c.role, c.status && `estado: ${c.status}`, c.power && `poder: ${c.power}`, c.weakness && `debilidad: ${c.weakness}`, c.trauma && `trauma: ${c.trauma}`, c.goal && `objetivo: ${c.goal}`, c.appearance && `apariencia: ${c.appearance}`, (c.relations || []).length && 'relaciones: ' + c.relations.map(r => `${r.kind} de ${nm(r.target)}`).join(', ')].filter(Boolean).join(' · '));

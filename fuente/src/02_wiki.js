@@ -149,6 +149,7 @@ VIEWS.biblia = () => {
   return `<div class="head"><div><h1>🧠 ${esc(m.name)}</h1><p class="muted">La Biblia es la memoria total de este manhwa. Todo lo que escribas aquí lo usa la IA.</p></div>
     <div class="row"><button class="pri" data-a="importBible">📄 SUBIR MI BIBLIA (Word / PDF)</button><button class="pri" data-a="dlBible">📥 DESCARGAR MI BIBLIA (Word)</button><button class="pri" data-a="dlAll">📦 DESCARGAR TODO</button><button data-a="dlBibleOnly">⬇ Solo historia</button><button data-a="go" data-to="${mlink(m, 'caps')}">📖 Capítulos (${caps.length})</button><button data-a="go" data-to="${mlink(m, 'lector', 'novela')}">🎧 Leer como novela</button></div></div>
     <div class="alert info small" style="margin-bottom:14px"><div>📄 ¿Ya tienes tu biblia escrita? Súbela en Word (.docx), PDF o texto y reparto todo solo: historia, personajes, lugares, poderes, objetos, facciones, línea de tiempo y fichas canon. Tú revisas y apruebas antes de guardar.<br>📥 <b>Descargar mi biblia</b> crea un Word siempre actualizado con todo lo que tienes en la app (con fotos y LoRAs). <b>Descargar todo</b> agrega imágenes, videos, audios y archivos LoRA en un .zip. Cada personaje, lugar, sección, capítulo, imagen y video también tiene su propio botón ⬇.</div></div>
+    ${typeof gxHTML === 'function' ? gxHTML(m) : ''}
     <div class="grid2">
       <div class="panelbox"><h2>Historia</h2>
         <label class="f">Nombre del manhwa<input ${bindAttr(m, 'name')} value="${esc(m.name)}"></label>
@@ -156,6 +157,8 @@ VIEWS.biblia = () => {
         <label class="f">Sinopsis<textarea ${bindAttr(b, 'synopsis')}>${esc(b.synopsis)}</textarea></label>
         <label class="f">Trama completa<textarea style="min-height:160px" ${bindAttr(b, 'plot')}>${esc(b.plot)}</textarea></label>
         <label class="f">Reglas del mundo<textarea style="min-height:120px" ${bindAttr(b, 'rules')}>${esc(b.rules)}</textarea></label>
+        <label class="f">🗂️ Otros apuntes (todo lo demás de tu biblia: temas, arcos, glosario, notas)<textarea style="min-height:120px" ${bindAttr(b, 'extras')}>${esc(b.extras || '')}</textarea></label>
+        ${(b.sources || []).length ? `<div class="small" style="margin-top:6px"><b>📄 Mis documentos originales</b>${b.sources.map(d => `<div class="row nw between" style="border-top:1px solid var(--line);padding:4px 0"><span>${esc(d.name)} <span class="muted">· ${fmtDate(d.at)} · ${Math.round(d.text.length / 1000)}k caracteres</span></span><span class="row nw"><button class="sm" data-a="srcView" data-id="${d.id}">👁 Ver</button><button class="sm" data-a="srcDl" data-id="${d.id}">⬇</button><button class="sm icon danger" data-a="srcDel" data-id="${d.id}">🗑️</button></span></div>`).join('')}</div>` : ''}
         <label class="f">Protagonista (para portadas)<select ${bindAttr(b, 'protagonistId')}><option value="">—</option>${m.characters.map(c => `<option value="${c.id}" ${b.protagonistId === c.id ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}</select></label>
       </div>
       <div class="col">
