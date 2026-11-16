@@ -10,16 +10,17 @@ function docField(obj, key, { label = '', big = false, ph = '', title = false, n
   return `<div class="docrow ${title ? 'doctitle' : ''}">${label ? `<span class="doclab">${esc(label)}</span>` : ''}<textarea class="docf ${big ? 'big' : ''}" rows="1" spellcheck="true" placeholder="${esc(ph || (label ? 'Escribe aquí…' : ''))}" ${bindAttr(obj, key, { num })}>${esc(v)}</textarea></div>`;
 }
 VIEWS.bibliadoc = () => {
-  const m = cur(); const b = m.bible; const tab = Route.a || 'viva';
+  const m = cur(); const b = m.bible; const tab = Route.a || 'base';
   const S2 = typeof secs === 'function' ? secs(m) : [];
   const toc = [['dh', '🧠 Historia'], ...Object.entries(TYPES).map(([t, T]) => ['d-' + t, `${T.icon} ${T.label}`]), ['dcanon', '📌 Fichas canon'], ...(S2.length ? [['dsecs', '📘 Secciones']] : []), ['dcaps', '📖 Capítulos']];
-  const head = `<div class="head"><div><h1>📖 Mi biblia completa</h1><p class="muted">Todo tu manhwa en un solo documento. Escribe directo: cada cambio se guarda al momento en su lugar y se sincroniza en todos lados.</p></div>
-    <div class="row"><button data-a="go" data-to="${mlink(m, 'biblia')}">← Biblia</button><button data-a="dlBible">⬇ Word</button></div></div>
-    <div class="row" style="margin-bottom:12px"><button class="${tab === 'viva' ? 'pri' : ''}" data-a="go" data-to="${mlink(m, 'bibliadoc', 'viva')}">📖 Mi biblia (se puede editar)</button><button class="${tab === 'original' ? 'pri' : ''}" data-a="go" data-to="${mlink(m, 'bibliadoc', 'original')}">📄 Documento original (como lo mandé)${(b.sources || []).length ? '' : ' · no hay'}</button></div>`;
+  const head = `<div class="head"><div><h1>📜 Mi biblia</h1><p class="muted">${tab === 'base' ? 'Tu documento de la biblia es la base: edítalo aquí como en Word, agrega lo que quieras y toca “Repartir” para que se acomode en todo tu manhwa.' : tab === 'viva' ? 'Así quedó repartida tu biblia en la app. Lo que edites aquí cambia directo en cada ficha (y la app te ofrece pasarlo a tu documento).' : 'Las versiones de tu biblia tal como las subiste (respaldo).'}</p></div>
+    <div class="row"><button data-a="go" data-to="${mlink(m, 'biblia')}">← Biblia</button><button data-a="dlMaster">⬇ Word</button></div></div>
+    <div class="row" style="margin-bottom:12px"><button class="${tab === 'base' ? 'pri' : ''}" data-a="go" data-to="${mlink(m, 'bibliadoc', 'base')}">📜 Mi biblia (documento base)</button><button class="${tab === 'viva' ? 'pri' : ''}" data-a="go" data-to="${mlink(m, 'bibliadoc', 'viva')}">🗂️ Cómo quedó repartida</button><button class="${tab === 'original' ? 'pri' : ''}" data-a="go" data-to="${mlink(m, 'bibliadoc', 'original')}">📚 Versiones que subiste${(b.sources || []).length ? ' (' + b.sources.length + ')' : ''}</button></div>`;
+  if (tab === 'base') return head + masterHTML(m);
   if (tab === 'original') {
     const docs = b.sources || [];
     return head + (docs.length ? docs.map(d => `<div class="docpage"><div class="row between"><h2 style="margin:0">📄 ${esc(d.name)}</h2><span class="small muted">${fmtDate(d.at)} · ${d.text.split(/\s+/).length.toLocaleString('es')} palabras</span></div>
-      <p class="tiny dim">Esta es tu copia tal cual la subiste (respaldo). Lo que edites aquí cambia solo esta copia; para cambiar tu manhwa usa “Mi biblia”.</p>
+      <p class="tiny dim">Así la subiste ese día (respaldo). Tu biblia actual, con todos tus cambios, está en “📜 Mi biblia”.</p>
       <textarea class="docf big" rows="1" ${bindAttr(d, 'text')}>${esc(d.text)}</textarea></div>`).join('') : '<div class="empty">Todavía no has subido un documento. Usa “📄 SUBIR MI BIBLIA” en la Biblia.</div>');
   }
   const ent = (t, T) => {

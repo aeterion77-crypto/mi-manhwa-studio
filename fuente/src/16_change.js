@@ -16,6 +16,7 @@ const gxHit = (txt, kw) => { const t = norm(txt || ''); return kw.some(k => t.in
 /* Todo lo editable del manhwa, con su "dirección" */
 function gxFields(m) {
   const F = []; const add = (p, l, v, long = false) => { if (v != null && String(v).trim() !== '') F.push({ p, l, v: String(v), long }); };
+  if (typeof master === 'function') add('doc.text', '📜 Mi biblia (documento base)', master(m).text, true);
   const b = m.bible; [['synopsis', 'Sinopsis'], ['plot', 'Trama completa'], ['rules', 'Reglas del mundo'], ['genre', 'Género'], ['tone', 'Tono']].forEach(([k, l]) => add('bible.' + k, 'Biblia · ' + l, b[k], k === 'plot'));
   for (const s of b.sections || []) { add(`sec.${s.id}.title`, `${s.icon} Sección · nombre`, s.title); add(`sec.${s.id}.text`, `${s.icon} ${s.title}`, s.text, s.text.length > 1500); }
   for (const t of Object.keys(TYPES)) { const T = TYPES[t]; for (const e of m[T.key] || []) for (const [k, l] of T.fields) if (!['loraId', 'loraWeight'].includes(k)) add(`ent.${e.id}.${k}`, `${T.icon} ${e.name} · ${l}`, e[k]); }
@@ -36,6 +37,7 @@ function gxFields(m) {
 function gxGet(m, path) { return gxFields(m).find(f => f.p === path)?.v ?? ''; }
 function gxSet(m, path, val) {
   const [kind, a, b, c] = path.split('.');
+  if (kind === 'doc') { master(m).text = val; return true; }
   if (kind === 'bible') { m.bible[a] = val; return true; }
   if (kind === 'sec') { const s = (m.bible.sections || []).find(x => x.id === a); if (!s) return false; s[b] = val; return true; }
   if (kind === 'ent') { const e = findEntity(m, a); if (!e) return false; const T = TYPES[findEntityType(m, a)]; const ty = T.fields.find(f => f[0] === b)?.[2]; e[b] = ty === 'num' ? (Number(val) || 0) : val; return true; }
@@ -54,9 +56,10 @@ function gxSet(m, path, val) {
 const reEsc = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const wordRe = w => new RegExp(`(?<![\\p{L}\\d])${reEsc(w)}(?![\\p{L}\\d])`, 'gu');
 /* el pedido para Claude: lo estructurado completo + lo largo solo donde se menciona */
-function gxPrompt(m, q) {
+function gxPrompt(m, q, opts = {}) {
   const kw = gxKeywords(m, q); let size = 0; const L = [];
   for (const f of gxFields(m)) {
+    if (opts.noDoc && f.p === 'doc.text') continue;
     if (f.long) {
       const paras = f.v.split(/\n\s*\n/); const hits = paras.map((t, i) => [i, t]).filter(([, t]) => gxHit(t, kw));
       if (!hits.length) continue; const chunk = hits.slice(0, 25).map(([i, t]) => `  [párrafo ${i + 1}] ${t.slice(0, 1500)}`).join('\n');
@@ -69,6 +72,10 @@ function gxPrompt(m, q) {
   const typeList = Object.entries(TYPES).map(([t, T]) => `  "${t}" (${T.label}): campos ${T.fields.filter(([k]) => !['loraId', 'loraWeight', 'trigger'].includes(k)).map(([k, l, ty, o]) => `${k}${ty === 'select' ? '[' + o.join('/') + ']' : ''}`).join(', ')}`).join('\n');
   return `Eres el editor de continuidad del manhwa "${m.name}". El autor quiere hacer este CAMBIO o AGREGAR esto a su historia:
 «${q}»
+
+${opts.noDoc ? 'El documento base del autor (doc.text) YA tiene el cambio: NO lo modifiques; reparte el cambio al resto.' : `MUY IMPORTANTE: el documento base de la biblia del autor (doc.text) es la FUENTE PRINCIPAL. Primero escribe ahí el cambio o lo nuevo (con "doc_replace" o "doc_insert", en la parte que le corresponde y con el estilo del autor), y después repártelo a las fichas, canon, secciones, capítulos, etc.
+TÍTULOS Y PARTES DE SU DOCUMENTO:
+${typeof docHeads === 'function' ? docHeads(master(m).text).slice(0, 120).join('\n') : ''}`}
 
 Si el autor AGREGA información nueva: si dice dónde ponerla, ponla ahí; si no lo dice, decide tú el mejor lugar (personaje, lugar, poder, objeto, facción, evento de la historia del mundo, ficha canon, una sección de la biblia como Temas/Arcos/Glosario/Estilo, o un capítulo). Si un personaje/lugar/etc. ya existe, COMPLETA su ficha en vez de crear otro igual. Reparte el texto en todos los lugares que correspondan y no pierdas nada de lo que escribió el autor.
 
@@ -85,8 +92,11 @@ Operaciones posibles:
 - {"op":"new","type":"personajes|lugares|poderes|objetos|facciones|historia","data":{campos},"why":""}  → crear una ficha NUEVA (solo si no existe ya)
 - {"op":"new","type":"seccion","data":{"title":"nombre de la sección","icon":"emoji","text":"contenido"},"why":""}  → agregar a una sección de la biblia (si ya existe una con ese nombre, se le añade)
 - {"op":"new","type":"capitulo","data":{"number":número,"title":"","premise":"qué pasa"},"why":""}  → capítulo nuevo
+- {"op":"doc_replace","find":"texto EXACTO del documento base","replace":"texto nuevo","why":""}  → cambiar algo en el documento de la biblia
+- {"op":"doc_insert","after":"texto EXACTO del documento (ej. el título de la parte)","text":"lo nuevo","why":""}  → agregar algo al documento de la biblia en su lugar
 - {"path":"dirección","op":"append","text":"texto a AGREGAR al final de ese campo","why":""}  → para añadir información a algo que ya existe sin borrar lo que tenía
 
+Para llenar un campo VACÍO de una ficha que ya existe usa la dirección ent.<id>.<campo> con "set" (el id lo ves en las otras direcciones de esa ficha).
 Tipos de ficha y sus campos:
 ${typeList}
 
@@ -102,9 +112,13 @@ ACT.gxRun = async el => {
   let r; await busy(el, async () => { r = await aiJSON(gxPrompt(m, q), { max_tokens: 16000, temperature: 0.2, title: 'Cambiar o agregar en mi manhwa', estOut: 4000 }); }, 'Buscando en todo…');
   if (!r) return; gxReview(m, q, r);
 };
-function gxReview(m, q, r) {
+function gxReview(m, q, r, opts = {}) {
   const items = [];
   for (const x of r.cambios || []) {
+    const isDoc = x.op === 'doc_replace' || x.op === 'doc_insert' || x.path === 'doc.text';
+    if (opts.noDoc && isDoc) continue; if (opts.onlyDoc && !isDoc) continue;
+    if (x.op === 'doc_replace') { const T0 = master(m).text; if (x.find && T0.includes(x.find) && x.find !== x.replace) items.push({ ...x, label: '📜 En tu biblia: cambiar', before: x.find, after: x.replace ?? '' }); continue; }
+    if (x.op === 'doc_insert') { if (String(x.text || '').trim()) items.push({ ...x, anchor: x.after || '', label: `📜 En tu biblia: agregar${x.after ? ' después de “' + String(x.after).slice(0, 60) + '”' : ' al final'}`, before: '—', after: x.text }); continue; }
     if (x.op === 'rename' && x.from && x.to && x.from !== x.to) { const hits = gxRenameHits(m, x.from); if (hits.length) items.push({ ...x, label: `🔁 Cambiar “${x.from}” por “${x.to}” en TODO`, list: true, before: hits.slice(0, 6).map(h => h.l).join(' · ') + (hits.length > 6 ? ` · y ${hits.length - 6} más` : ''), after: `${hits.length} lugares` }); continue; }
     if (x.op === 'new' && x.type && x.data) {
       const d = x.data || {};
@@ -116,7 +130,7 @@ function gxReview(m, q, r) {
       items.push({ ...x, label: ex ? `${T.icon} Completar ficha de ${ex.name}` : `➕ ${T.icon} Nuevo ${T.one}: ${d.name}`, before: ex ? '(solo llena lo que esté vacío y agrega lo nuevo)' : '—', after: summ || d.name }); continue;
     }
     if (x.op === 'canon' && x.entity && x.attribute) { items.push({ ...x, label: `📌 Nueva ficha canon: ${x.entity} · ${x.attribute}`, before: '—', after: x.value }); continue; }
-    const f = gxFields(m).find(ff => ff.p === x.path); if (!f) continue;
+    const f = gxFields(m).find(ff => ff.p === x.path) || gxEmpty(m, x.path); if (!f) continue;
     if (x.op === 'append') { if (!x.text) continue; items.push({ ...x, label: '➕ ' + f.l, before: f.v.length > 200 ? '…' + f.v.slice(-200) : f.v, after: (f.v.length > 200 ? '…' + f.v.slice(-120) : f.v) + '\n' + x.text }); continue; }
     if (x.op === 'replace') { if (!x.find || !f.v.includes(x.find) || x.find === x.replace) continue; items.push({ ...x, label: f.l, before: x.find, after: x.replace }); }
     else if (x.op === 'set') { if (String(x.value ?? '') === f.v) continue; items.push({ ...x, label: f.l, before: f.v, after: String(x.value ?? '') }); }
@@ -134,8 +148,9 @@ function gxReview(m, q, r) {
   const ok = bg.querySelector('[data-x=ok]'); if (!ok) return;
   ok.onclick = async () => {
     const sel = [...bg.querySelectorAll('[data-g]')].filter(c => c.checked).map(c => items[+c.dataset.g]); if (!sel.length) return toast('No marcaste ningún cambio', 'err');
-    await gxSnapshot(m); let n = 0; const touched = new Set();
+    await gxSnapshot(m); let n = 0; const touched = new Set(); const M0 = master(m); const wasPending = M0.text !== M0.syncedText;
     for (const it of sel) {
+      if (it.op === 'doc_replace' || it.op === 'doc_insert') { if (docApply(m, it)) n++; continue; }
       if (it.op === 'rename') { const re = wordRe(it.from); for (const f of gxFields(m)) { re.lastIndex = 0; if (re.test(f.v)) { re.lastIndex = 0; if (gxSet(m, f.p, f.v.replace(re, it.to))) { n++; touched.add(f.p); } } } continue; }
       if (it.op === 'new') {
         const d = it.data || {};
@@ -154,9 +169,10 @@ function gxReview(m, q, r) {
       else if (gxSet(m, it.path, it.after)) { n++; touched.add(it.path); }
     }
     const pans = [...touched].filter(p => p.startsWith('pan.')).map(p => p.split('.').slice(1, 3).join('.')); const withImg = new Set(pans.filter(k => { const [c, p] = k.split('.'); return chapterById(m, c)?.panels.find(x => x.id === p)?.imageId; }));
+    if (opts.after) opts.after(); else if (!wasPending) mdSynced(m); else master(m).snap = fieldsSnap(m);
     (m.changeLog ||= []).unshift({ at: Date.now(), text: q, n }); m.changeLog = m.changeLog.slice(0, 30);
     touch(m); bg.remove(); const qi = $('#gxQ'); if (qi) qi.value = ''; render();
-    toast(`🪄 Listo: ${n} cambios hechos en todo tu manhwa.${withImg.size ? ` ${withImg.size} paneles que ya tenían imagen quedaron sin aprobar (revísalos y vuelve a dibujarlos si quieres).` : ''} Puedes deshacerlo.`, 'ok');
+    toast(`${opts.onlyDoc ? '📜 Listo: tu biblia quedó al día' : `🪄 Listo: ${n} cambios hechos en tu biblia y en todo tu manhwa`}.${withImg.size ? ` ${withImg.size} paneles que ya tenían imagen quedaron sin aprobar (revísalos y vuelve a dibujarlos si quieres).` : ''} Puedes deshacerlo.`, 'ok');
   };
 }
 ACT.gxUndo = async () => {
@@ -169,9 +185,9 @@ function gxHTML(m) {
   const log = m.changeLog || [];
   return `<div class="panelbox" style="margin-bottom:16px;border-color:var(--neon)">
     <h2 style="margin-top:0">🪄 Cambiar o agregar algo a mi manhwa</h2>
-    <p class="small muted">Escríbelo como en el chat. <b>Para cambiar:</b> Claude busca dónde aparece (biblia, fichas, canon, capítulos, texto, paneles, diálogos) y lo cambia en todos lados. <b>Para agregar:</b> dile dónde va, o solo pégalo y Claude lo acomoda en su lugar. Siempre te muestra todo antes de guardar.</p>
+    <p class="small muted">Escríbelo como en el chat. <b>Para cambiar:</b> Claude busca dónde aparece (biblia, fichas, canon, capítulos, texto, paneles, diálogos) y lo cambia en todos lados. <b>Para agregar:</b> dile dónde va, o solo pégalo y Claude lo acomoda. Todo se escribe <b>primero en tu documento de la biblia</b> y de ahí se reparte a todos lados. Siempre te muestra todo antes de guardar.</p>
     <textarea id="gxQ" style="min-height:110px" placeholder="Cambiar: “Kael ahora tiene 19 años”, “el maná ahora se llama aura”, “Lira no muere en el cap 5”&#10;Agregar diciendo dónde: “agrega en personajes a Mira, sanadora de 16 años, hermana de Lira”, “pon en el glosario: Velo = frontera entre mundos”&#10;Agregar sin decir dónde: pega cualquier texto nuevo de tu historia y Claude lo acomoda"></textarea>
-    <div class="row" style="margin-top:8px"><button class="pri" data-a="gxRun">🪄 Cambiar / acomodar en todos lados</button><button class="pri" data-a="go" data-to="${mlink(m, 'bibliadoc')}">📖 Ver y editar toda mi biblia</button>${(m.bible.sources || []).length ? `<button data-a="go" data-to="${mlink(m, 'bibliadoc', 'original')}">📄 Ver mi documento original</button>` : ''}<button data-a="gxUndo">↩️ Deshacer el último</button></div>
+    <div class="row" style="margin-top:8px"><button class="pri" data-a="gxRun">🪄 Cambiar / acomodar en todos lados</button><button class="pri" data-a="go" data-to="${mlink(m, 'bibliadoc', 'base')}">📜 Abrir y editar mi biblia (documento)</button><button data-a="go" data-to="${mlink(m, 'bibliadoc', 'viva')}">🗂️ Ver cómo quedó repartida</button><button data-a="gxUndo">↩️ Deshacer el último</button></div>
     ${log.length ? `<details style="margin-top:8px"><summary class="small muted">Cambios que has hecho (${log.length})</summary>${log.map(x => `<div class="small" style="padding:4px 0;border-top:1px solid var(--line)">${fmtDate(x.at)} · ${esc(x.text)} <span class="muted">(${x.n} cambios)</span></div>`).join('')}</details>` : ''}
   </div>`;
 }
@@ -180,3 +196,13 @@ function gxHTML(m) {
 ACT.srcView = el => { const d = cur().bible.sources.find(x => x.id === el.dataset.id); const bg = modal(`<h2>📄 ${esc(d.name)}</h2><div style="white-space:pre-wrap;max-height:65vh;overflow:auto;font-family:Georgia,serif;line-height:1.6">${esc(d.text)}</div><div class="acts"><button class="pri" data-x="ok">Cerrar</button></div>`, { wide: true }); bg.querySelector('[data-x=ok]').onclick = () => bg.remove(); };
 ACT.srcDl = el => { const d = cur().bible.sources.find(x => x.id === el.dataset.id); downloadBlob(new Blob([d.text], { type: 'text/plain;charset=utf-8' }), fileSafe(d.name.replace(/\.[a-z0-9]+$/i, '')) + ' (original).txt'); };
 ACT.srcDel = async el => { const m = cur(); if (!await confirmBox('¿Borrar este documento original? (lo que ya se acomodó en tu Biblia no se borra)', { ok: 'Borrar' })) return; m.bible.sources = m.bible.sources.filter(x => x.id !== el.dataset.id); touch(m); render(); };
+
+/* un campo que todavía está vacío (para poder llenarlo) */
+function gxEmpty(m, path) {
+  const [kind, a, b] = String(path || '').split('.');
+  if (kind === 'ent') { const e = findEntity(m, a); if (!e) return null; const T = TYPES[findEntityType(m, a)]; const fd = T.fields.find(x => x[0] === b); if (!fd) return null; return { p: path, l: `${T.icon} ${e.name} · ${fd[1]}`, v: '' }; }
+  if (kind === 'bible' && ['synopsis', 'plot', 'rules', 'genre', 'tone'].includes(a)) return { p: path, l: 'Biblia · ' + a, v: '' };
+  if (kind === 'cap' && chapterById(m, a) && ['title', 'premise', 'summary'].includes(b)) return { p: path, l: `📖 Cap ${chapterById(m, a).number} · ${b}`, v: '' };
+  if (kind === 'sec') { const sx = (m.bible.sections || []).find(x => x.id === a); if (sx) return { p: path, l: `${sx.icon} ${sx.title}`, v: '' }; }
+  return null;
+}

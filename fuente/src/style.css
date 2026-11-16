@@ -328,3 +328,6 @@ input[type=radio],input[type=checkbox]{width:20px;min-height:20px;height:20px;fl
 @media(max-width:800px){.doclayout{grid-template-columns:1fr}.doctoc{position:static;flex-direction:row;flex-wrap:wrap}.docpage{padding:16px}.docrow{flex-direction:column;gap:0}.doclab{flex:none;padding-top:4px}}
 
 .stfull{background:rgba(180,77,255,.07);border:1px solid rgba(180,77,255,.35);border-radius:12px;padding:10px 12px}
+
+.mdtext{min-height:70vh;font-size:16.5px;line-height:1.75;white-space:pre-wrap}
+.mdbar .alert{margin-bottom:8px}

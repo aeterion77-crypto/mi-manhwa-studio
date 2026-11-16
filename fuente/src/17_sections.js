@@ -50,7 +50,8 @@ function haveHTML(m) {
       ${tile('📌', 'Fichas canon', m.canon.length, mlink(m, 'canon'))}
       ${tile('📖', 'Capítulos', chapterList(m).length, mlink(m, 'caps'))}
       ${S2.map(s => tile(s.icon, s.title, 1, '#' + s.id, `${s.text.split(/\s+/).filter(Boolean).length} palabras`)).join('')}
-      ${(b.sources || []).length ? tile('📄', 'Documento original', b.sources.length, '#sec-docs', `${b.sources.length} guardado${b.sources.length > 1 ? 's' : ''} completo${b.sources.length > 1 ? 's' : ''}`) : ''}
+      ${tile('📜', 'Mi biblia (documento base)', 1, mlink(m, 'bibliadoc', 'base'), (typeof master === 'function' ? master(m).text.split(/\s+/).filter(Boolean).length.toLocaleString('es') + ' palabras' : ''))}
+      ${(b.sources || []).length ? tile('📚', 'Versiones que subiste', b.sources.length, '#sec-docs', `${b.sources.length} guardado${b.sources.length > 1 ? 's' : ''} completo${b.sources.length > 1 ? 's' : ''}`) : ''}
     </div>
   </div>`;
 }
