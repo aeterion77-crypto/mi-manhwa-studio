@@ -140,7 +140,7 @@ function gxHTML(m) {
     <h2 style="margin-top:0">🪄 Cambiar algo en todo mi manhwa</h2>
     <p class="small muted">Escríbelo como en el chat. Claude busca dónde aparece en tu biblia, personajes, lugares, poderes, fichas canon, capítulos, texto, versión novela, paneles y diálogos, y te muestra cada cambio para que lo apruebes.</p>
     <textarea id="gxQ" style="min-height:80px" placeholder="Ej. “Kael ahora tiene 19 años y sus ojos son dorados”, “el maná ahora se llama aura”, “Lira no muere en el cap 5, solo queda herida”, “la Academia Umbra ahora se llama Academia Noctis”"></textarea>
-    <div class="row" style="margin-top:8px"><button class="pri" data-a="gxRun">🪄 Hacer el cambio en todos lados</button><button data-a="gxUndo">↩️ Deshacer el último</button></div>
+    <div class="row" style="margin-top:8px"><button class="pri" data-a="gxRun">🪄 Hacer el cambio en todos lados</button><button class="pri" data-a="go" data-to="${mlink(m, 'bibliadoc')}">📖 Ver y editar toda mi biblia</button>${(m.bible.sources || []).length ? `<button data-a="go" data-to="${mlink(m, 'bibliadoc', 'original')}">📄 Ver mi documento original</button>` : ''}<button data-a="gxUndo">↩️ Deshacer el último</button></div>
     ${log.length ? `<details style="margin-top:8px"><summary class="small muted">Cambios que has hecho (${log.length})</summary>${log.map(x => `<div class="small" style="padding:4px 0;border-top:1px solid var(--line)">${fmtDate(x.at)} · ${esc(x.text)} <span class="muted">(${x.n} cambios)</span></div>`).join('')}</details>` : ''}
   </div>`;
 }

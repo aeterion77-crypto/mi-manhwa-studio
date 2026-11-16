@@ -308,3 +308,21 @@ input[type=radio],input[type=checkbox]{width:20px;min-height:20px;height:20px;fl
 .secbox .sectext{margin-top:8px;max-height:420px;overflow:auto;line-height:1.6}
 .sectext p{margin:0 0 6px}.sectext h4{margin:10px 0 4px;color:var(--neon)}.sectext ul{margin:4px 0 8px;padding-left:20px}
 .flash{box-shadow:0 0 0 3px var(--neon)!important;transition:box-shadow .3s}
+
+.doclayout{display:grid;grid-template-columns:210px 1fr;gap:18px;align-items:start}
+.doctoc{position:sticky;top:76px;display:flex;flex-direction:column;gap:2px}
+.doctoc a{padding:6px 10px;border-radius:8px;cursor:pointer;font-size:14px;color:inherit}
+.doctoc a:hover{background:rgba(180,77,255,.12)}
+.docpage{background:#17151c;border:1px solid var(--line);border-radius:16px;padding:28px 34px;max-width:900px}
+.docsec{margin-bottom:26px}.docsec h2{border-bottom:1px solid var(--line);padding-bottom:6px}
+.docent{padding:10px 0 12px;border-bottom:1px dashed rgba(255,255,255,.08)}
+.docrow{display:flex;gap:10px;align-items:flex-start;margin:2px 0}
+.doclab{flex:0 0 170px;color:var(--neon);font-weight:600;font-size:14px;padding-top:7px}
+.docf{flex:1;width:100%;background:transparent;border:1px solid transparent;border-radius:8px;padding:6px 8px;font:inherit;font-family:Georgia,'Times New Roman',serif;font-size:16px;line-height:1.6;color:inherit;resize:none;overflow:hidden;min-height:0}
+.docf:hover{border-color:rgba(255,255,255,.08)}.docf:focus{border-color:var(--neon);background:rgba(180,77,255,.05);outline:none}
+.docf::placeholder{color:rgba(255,255,255,.22)}
+.docf.hit{background:rgba(255,210,60,.12);border-color:rgba(255,210,60,.5)}
+.doctitle{align-items:center}.doctitle .docf{font-family:inherit;font-size:22px;font-weight:800}
+.docsel{background:transparent;border:1px solid var(--line);border-radius:8px;padding:4px 8px;color:inherit;width:auto}
+.doccanon .row{margin:2px 0}
+@media(max-width:800px){.doclayout{grid-template-columns:1fr}.doctoc{position:static;flex-direction:row;flex-wrap:wrap}.docpage{padding:16px}.docrow{flex-direction:column;gap:0}.doclab{flex:none;padding-top:4px}}
