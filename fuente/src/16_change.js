@@ -66,8 +66,11 @@ function gxPrompt(m, q) {
       const line = `${f.p} | ${f.l} = ${f.v.slice(0, 2000)}`; if (size + line.length > 160000) continue; L.push(line); size += line.length;
     }
   }
-  return `Eres el editor de continuidad del manhwa "${m.name}". El autor quiere hacer este CAMBIO en su historia:
+  const typeList = Object.entries(TYPES).map(([t, T]) => `  "${t}" (${T.label}): campos ${T.fields.filter(([k]) => !['loraId', 'loraWeight', 'trigger'].includes(k)).map(([k, l, ty, o]) => `${k}${ty === 'select' ? '[' + o.join('/') + ']' : ''}`).join(', ')}`).join('\n');
+  return `Eres el editor de continuidad del manhwa "${m.name}". El autor quiere hacer este CAMBIO o AGREGAR esto a su historia:
 «${q}»
+
+Si el autor AGREGA información nueva: si dice dónde ponerla, ponla ahí; si no lo dice, decide tú el mejor lugar (personaje, lugar, poder, objeto, facción, evento de la historia del mundo, ficha canon, una sección de la biblia como Temas/Arcos/Glosario/Estilo, o un capítulo). Si un personaje/lugar/etc. ya existe, COMPLETA su ficha en vez de crear otro igual. Reparte el texto en todos los lugares que correspondan y no pierdas nada de lo que escribió el autor.
 
 Encuentra TODO lo que hay que modificar para que el cambio quede igual en todos lados (biblia, fichas de personajes/lugares/poderes, fichas canon, capítulos, texto escrito, versión novela, paneles, diálogos, prompts de imagen en inglés) y propón cada modificación. Cambia SOLO lo necesario y conserva el estilo del autor. No inventes cosas que el autor no pidió. Si el cambio contradice algo importante o hay algo que no queda claro, dilo en "dudas".
 
@@ -79,6 +82,13 @@ Operaciones posibles:
 - {"path":"dirección","op":"replace","find":"texto EXACTO que existe en ese campo","replace":"texto nuevo","why":""}  → para textos largos (copia "find" exacto)
 - {"op":"rename","from":"palabra o nombre exacto","to":"nuevo","why":""}  → si es un cambio de nombre o palabra que debe cambiar en TODO el manhwa (la app lo cambia en todos lados, incluso donde no te mostré)
 - {"op":"canon","entity":"quién","attribute":"atributo","value":"valor","why":""}  → nueva ficha canon si el cambio es un hecho fijo importante
+- {"op":"new","type":"personajes|lugares|poderes|objetos|facciones|historia","data":{campos},"why":""}  → crear una ficha NUEVA (solo si no existe ya)
+- {"op":"new","type":"seccion","data":{"title":"nombre de la sección","icon":"emoji","text":"contenido"},"why":""}  → agregar a una sección de la biblia (si ya existe una con ese nombre, se le añade)
+- {"op":"new","type":"capitulo","data":{"number":número,"title":"","premise":"qué pasa"},"why":""}  → capítulo nuevo
+- {"path":"dirección","op":"append","text":"texto a AGREGAR al final de ese campo","why":""}  → para añadir información a algo que ya existe sin borrar lo que tenía
+
+Tipos de ficha y sus campos:
+${typeList}
 
 Responde SOLO con JSON:
 {"entendi":"qué entendiste del cambio, 1 frase","cambios":[…],"dudas":"vacío si no hay"}`;
@@ -88,21 +98,31 @@ function gxRenameHits(m, from) { const re = wordRe(from); return gxFields(m).fil
 async function gxSnapshot(m) { const k = 'gundo_' + m.id; const arr = (await IDB.get('kv', k)) || []; arr.push({ at: Date.now(), data: JSON.stringify(m) }); while (arr.length > 5) arr.shift(); await IDB.put('kv', k, arr); }
 ACT.gxRun = async el => {
   const m = cur(); const q = ($('#gxQ')?.value || '').trim();
-  if (q.length < 4) return toast('Escribe el cambio que quieres, como si me lo dijeras en el chat', 'err');
-  let r; await busy(el, async () => { r = await aiJSON(gxPrompt(m, q), { max_tokens: 16000, temperature: 0.2, title: 'Cambiar en todo mi manhwa' }); }, 'Buscando en todo…');
+  if (q.length < 4) return toast('Escribe lo que quieres cambiar o agregar, como si me lo dijeras en el chat', 'err');
+  let r; await busy(el, async () => { r = await aiJSON(gxPrompt(m, q), { max_tokens: 16000, temperature: 0.2, title: 'Cambiar o agregar en mi manhwa', estOut: 4000 }); }, 'Buscando en todo…');
   if (!r) return; gxReview(m, q, r);
 };
 function gxReview(m, q, r) {
   const items = [];
   for (const x of r.cambios || []) {
     if (x.op === 'rename' && x.from && x.to && x.from !== x.to) { const hits = gxRenameHits(m, x.from); if (hits.length) items.push({ ...x, label: `🔁 Cambiar “${x.from}” por “${x.to}” en TODO`, list: true, before: hits.slice(0, 6).map(h => h.l).join(' · ') + (hits.length > 6 ? ` · y ${hits.length - 6} más` : ''), after: `${hits.length} lugares` }); continue; }
+    if (x.op === 'new' && x.type && x.data) {
+      const d = x.data || {};
+      if (x.type === 'seccion') { const ex = (m.bible.sections || []).find(s => norm(s.title) === norm(d.title || '')); items.push({ ...x, label: ex ? `➕ Agregar a la sección ${ex.icon} ${ex.title}` : `➕ Nueva sección: ${d.icon || secIcon(d.title || '')} ${d.title || 'Sección'}`, before: ex ? '(se añade al final)' : '—', after: d.text || '' }); continue; }
+      if (x.type === 'capitulo') { const ex = chapterByNum(m, d.number); items.push({ ...x, label: ex ? `📖 Completar Cap ${d.number}` : `➕ Nuevo capítulo ${d.number ?? ''}${d.title ? ': ' + d.title : ''}`, before: '—', after: d.premise || '' }); continue; }
+      const T = TYPES[x.type]; if (!T || !d.name) continue;
+      const ex = (m[T.key] || []).find(e => norm(e.name) === norm(d.name));
+      const summ = T.fields.filter(([k]) => k !== 'name' && d[k]).map(([k, l]) => `${l}: ${d[k]}`).join('\n');
+      items.push({ ...x, label: ex ? `${T.icon} Completar ficha de ${ex.name}` : `➕ ${T.icon} Nuevo ${T.one}: ${d.name}`, before: ex ? '(solo llena lo que esté vacío y agrega lo nuevo)' : '—', after: summ || d.name }); continue;
+    }
     if (x.op === 'canon' && x.entity && x.attribute) { items.push({ ...x, label: `📌 Nueva ficha canon: ${x.entity} · ${x.attribute}`, before: '—', after: x.value }); continue; }
     const f = gxFields(m).find(ff => ff.p === x.path); if (!f) continue;
+    if (x.op === 'append') { if (!x.text) continue; items.push({ ...x, label: '➕ ' + f.l, before: f.v.length > 200 ? '…' + f.v.slice(-200) : f.v, after: (f.v.length > 200 ? '…' + f.v.slice(-120) : f.v) + '\n' + x.text }); continue; }
     if (x.op === 'replace') { if (!x.find || !f.v.includes(x.find) || x.find === x.replace) continue; items.push({ ...x, label: f.l, before: x.find, after: x.replace }); }
     else if (x.op === 'set') { if (String(x.value ?? '') === f.v) continue; items.push({ ...x, label: f.l, before: f.v, after: String(x.value ?? '') }); }
   }
   const cut = s => esc(String(s).length > 400 ? String(s).slice(0, 400) + '…' : s);
-  const bg = modal(`<h2>🪄 Cambios para: “${esc(q)}”</h2>
+  const bg = modal(`<h2>🪄 Cambios para: “${esc(q.length > 120 ? q.slice(0, 120) + "…" : q)}”</h2>
     ${r.entendi ? `<p class="small"><b>Entendí:</b> ${esc(r.entendi)}</p>` : ''}
     ${r.dudas ? `<div class="alert warn small"><div><b>Ojo:</b> ${esc(r.dudas)}</div></div>` : ''}
     ${items.length ? `<p class="small muted">${items.length} cambios. Desmarca los que no quieras. Los paneles que cambien quedan sin aprobar para que los revises antes de dibujarlos otra vez.</p>
@@ -117,6 +137,17 @@ function gxReview(m, q, r) {
     await gxSnapshot(m); let n = 0; const touched = new Set();
     for (const it of sel) {
       if (it.op === 'rename') { const re = wordRe(it.from); for (const f of gxFields(m)) { re.lastIndex = 0; if (re.test(f.v)) { re.lastIndex = 0; if (gxSet(m, f.p, f.v.replace(re, it.to))) { n++; touched.add(f.p); } } } continue; }
+      if (it.op === 'new') {
+        const d = it.data || {};
+        if (it.type === 'seccion') { secs(m); secAdd(m, { title: d.title || 'Notas', text: d.text || '', icon: d.icon }); n++; continue; }
+        if (it.type === 'capitulo') { const num = Number(d.number) || ((chapterList(m).at(-1)?.number || 0) + 1); const ex = chapterByNum(m, num); if (ex) { ex.title ||= d.title || ''; ex.premise = ex.premise ? ex.premise + '\n' + (d.premise || '') : (d.premise || ''); } else m.chapters.push(newChapter(m, num, d.title || '', d.premise || '')); n++; continue; }
+        const T = TYPES[it.type]; if (!T) continue; const arr = (m[T.key] ||= []);
+        const ex = arr.find(e => norm(e.name) === norm(d.name));
+        if (ex) { for (const [k] of T.fields) if (d[k] != null && String(d[k]).trim() && k !== 'name') { const cv = String(ex[k] ?? '').trim(); if (!cv) ex[k] = String(d[k]); else if (!cv.includes(String(d[k]).trim())) ex[k] = cv + '\n' + d[k]; } }
+        else { const e = { id: uid(T.key[0] + '_'), relations: [], createdAt: Date.now() }; for (const [k, , ty] of T.fields) if (d[k] != null && String(d[k]).trim()) e[k] = ty === 'num' ? Number(d[k]) || 0 : String(d[k]); if (it.type === 'historia') e.order = arr.length + 1; arr.push(e); }
+        n++; continue;
+      }
+      if (it.op === 'append') { const cv = gxGet(m, it.path); if (gxSet(m, it.path, cv ? cv + '\n' + it.text : it.text)) { n++; touched.add(it.path); } continue; }
       if (it.op === 'canon') { m.canon.push({ id: uid('k_'), entity: it.entity, attribute: it.attribute, value: it.value, since: '', note: 'Por cambio: ' + q.slice(0, 80) }); n++; continue; }
       const cur0 = gxGet(m, it.path);
       if (it.op === 'replace') { if (cur0.includes(it.find)) { gxSet(m, it.path, cur0.split(it.find).join(it.replace)); n++; touched.add(it.path); } }
@@ -137,10 +168,10 @@ ACT.gxUndo = async () => {
 function gxHTML(m) {
   const log = m.changeLog || [];
   return `<div class="panelbox" style="margin-bottom:16px;border-color:var(--neon)">
-    <h2 style="margin-top:0">🪄 Cambiar algo en todo mi manhwa</h2>
-    <p class="small muted">Escríbelo como en el chat. Claude busca dónde aparece en tu biblia, personajes, lugares, poderes, fichas canon, capítulos, texto, versión novela, paneles y diálogos, y te muestra cada cambio para que lo apruebes.</p>
-    <textarea id="gxQ" style="min-height:80px" placeholder="Ej. “Kael ahora tiene 19 años y sus ojos son dorados”, “el maná ahora se llama aura”, “Lira no muere en el cap 5, solo queda herida”, “la Academia Umbra ahora se llama Academia Noctis”"></textarea>
-    <div class="row" style="margin-top:8px"><button class="pri" data-a="gxRun">🪄 Hacer el cambio en todos lados</button><button class="pri" data-a="go" data-to="${mlink(m, 'bibliadoc')}">📖 Ver y editar toda mi biblia</button>${(m.bible.sources || []).length ? `<button data-a="go" data-to="${mlink(m, 'bibliadoc', 'original')}">📄 Ver mi documento original</button>` : ''}<button data-a="gxUndo">↩️ Deshacer el último</button></div>
+    <h2 style="margin-top:0">🪄 Cambiar o agregar algo a mi manhwa</h2>
+    <p class="small muted">Escríbelo como en el chat. <b>Para cambiar:</b> Claude busca dónde aparece (biblia, fichas, canon, capítulos, texto, paneles, diálogos) y lo cambia en todos lados. <b>Para agregar:</b> dile dónde va, o solo pégalo y Claude lo acomoda en su lugar. Siempre te muestra todo antes de guardar.</p>
+    <textarea id="gxQ" style="min-height:110px" placeholder="Cambiar: “Kael ahora tiene 19 años”, “el maná ahora se llama aura”, “Lira no muere en el cap 5”&#10;Agregar diciendo dónde: “agrega en personajes a Mira, sanadora de 16 años, hermana de Lira”, “pon en el glosario: Velo = frontera entre mundos”&#10;Agregar sin decir dónde: pega cualquier texto nuevo de tu historia y Claude lo acomoda"></textarea>
+    <div class="row" style="margin-top:8px"><button class="pri" data-a="gxRun">🪄 Cambiar / acomodar en todos lados</button><button class="pri" data-a="go" data-to="${mlink(m, 'bibliadoc')}">📖 Ver y editar toda mi biblia</button>${(m.bible.sources || []).length ? `<button data-a="go" data-to="${mlink(m, 'bibliadoc', 'original')}">📄 Ver mi documento original</button>` : ''}<button data-a="gxUndo">↩️ Deshacer el último</button></div>
     ${log.length ? `<details style="margin-top:8px"><summary class="small muted">Cambios que has hecho (${log.length})</summary>${log.map(x => `<div class="small" style="padding:4px 0;border-top:1px solid var(--line)">${fmtDate(x.at)} · ${esc(x.text)} <span class="muted">(${x.n} cambios)</span></div>`).join('')}</details>` : ''}
   </div>`;
 }
