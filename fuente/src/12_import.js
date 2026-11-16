@@ -19,7 +19,12 @@ async function readDocText(file) {
     for (let i = 1; i <= doc.numPages; i++) { const pg = await doc.getPage(i); const tc = await pg.getTextContent(); let line = '', lastY = null; for (const it of tc.items) { const y = it.transform?.[5]; if (lastY != null && Math.abs(y - lastY) > 4) { out.push(line); line = ''; } line += it.str + (it.hasEOL ? '\n' : ''); lastY = y; } out.push(line, ''); }
     return out.join('\n');
   }
-  return await file.text();
+  if (name.endsWith('.odt')) { const z = await JSZip.loadAsync(file); const xml = await z.file('content.xml').async('string'); return xml.replace(/<text:(p|h)[^>]*>/g, '\n').replace(/<text:tab\/>/g, ' ').replace(/<text:s[^>]*\/>/g, ' ').replace(/<[^>]+>/g, '').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&apos;/g, "'"); }
+  const t = await file.text();
+  if (name.endsWith('.rtf') || t.startsWith('{\\rtf')) return t.replace(/\\par[d]?/g, '\n').replace(/\{\\\*[^{}]*\}/g, '').replace(/\\'([0-9a-f]{2})/gi, (_, h) => String.fromCharCode(parseInt(h, 16))).replace(/\\[a-z]+-?\d* ?/gi, '').replace(/[{}]/g, '');
+  const bad = (t.slice(0, 4000).match(/[\u0000-\u0008\uFFFD]/g) || []).length;
+  if (bad > 20) throw new Error('No puedo leer ese tipo de archivo. Guárdalo como Word (.docx) o PDF, o copia el texto y pégalo en el cuadro.');
+  return t;
 }
 function importPrompt(m, text, part, parts) {
   const f = k => TYPES[k].fields.filter(([x]) => !['loraId', 'loraWeight'].includes(x)).map(([x, l, t, o]) => `"${x}": ${l}${o ? ' (' + o.join('|') + ')' : ''}`).join(', ');
@@ -52,27 +57,60 @@ function mergeImport(a, b) {
   }
   return out;
 }
-ACT.importBible = async () => {
+ACT.importBible = () => {
   const m = cur();
-  const [file] = await pickFiles({ multiple: false, accept: '.docx,.pdf,.txt,.md,.rtf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/pdf,text/plain' });
-  if (!file) return;
-  let text = '';
-  try { toast('Leyendo tu documento…'); text = (await readDocText(file)).replace(/\r/g, '').replace(/\n{3,}/g, '\n\n').trim(); } catch (e) { return toast(e.message, 'err'); }
-  if (text.length < 30) return toast('No encontré texto en ese archivo (si es un PDF escaneado, no tiene texto que leer).', 'err');
-  const max = isPremium() ? 150000 : 90000; const parts = splitDoc(text, max);
-  const chars = text.length;
-  if (!isPremium() && !await confirmCost('Importar mi biblia', [aiLine(chars + 2500 * parts.length, Math.min(30000, Math.round(chars / 3)), 30000 * parts.length, `Leer “${file.name}” (${Math.round(chars / 1000)}k caracteres${parts.length > 1 ? ', ' + parts.length + ' partes' : ''})`)])) return;
-  const btn = $('[data-a=importBible]');
-  await busy(btn, async () => {
+  const bg = modal(`<h2>📄 Subir mi biblia</h2>
+    <p class="small muted">Sube tu archivo <b>o</b> pega el texto. Reparto todo solo: historia, personajes, lugares, poderes, objetos, facciones, línea de tiempo y fichas canon. Tú revisas antes de guardar.</p>
+    <div class="row"><button class="pri big" data-x="file">📁 Elegir archivo (Word, PDF, TXT, ODT, RTF)</button><span class="small muted" id="ibFile"></span></div>
+    <label class="f">…o pega aquí el texto de tu biblia<textarea id="ibText" style="min-height:220px" placeholder="Pega aquí tu biblia completa (personajes, lugares, poderes, historia…)"></textarea></label>
+    <div id="ibStatus" class="small"></div>
+    <div class="acts"><button data-x="no">Cancelar</button><button class="pri" data-x="go">✨ Acomodar todo</button></div>`, { wide: true });
+  const status = (msg, cls = '') => { const el = bg.querySelector('#ibStatus'); if (el) el.innerHTML = `<div class="alert ${cls || 'info'}">${msg}</div>`; };
+  let fileText = '', fileName = '';
+  bg.querySelector('[data-x=no]').onclick = () => bg.close();
+  bg.querySelector('[data-x=file]').onclick = async () => {
+    const [file] = await pickFiles({ multiple: false, accept: '*/*' }); if (!file) return;
+    status(`<span class="spin"></span> Leyendo “${esc(file.name)}”…`);
+    try { fileText = (await readDocText(file)).replace(/\r/g, '').replace(/\n{3,}/g, '\n\n').trim(); fileName = file.name; }
+    catch (e) { fileText = ''; return status('⚠️ ' + esc(e.message), 'bad'); }
+    if (fileText.length < 30) { fileText = ''; return status('⚠️ No encontré texto en ese archivo (si es un PDF escaneado o fotos, no tiene texto). Copia y pega el texto en el cuadro.', 'bad'); }
+    bg.querySelector('#ibFile').textContent = `✔ ${file.name} · ${fileText.length.toLocaleString('es')} caracteres`;
+    bg.querySelector('#ibText').value = fileText.slice(0, 200000);
+    status(`✔ Leí tu archivo (${fileText.length.toLocaleString('es')} caracteres). Revisa el texto si quieres y toca <b>✨ Acomodar todo</b>.`, 'ok');
+  };
+  bg.querySelector('[data-x=go]').onclick = async e => {
+    const text = (bg.querySelector('#ibText').value || '').trim();
+    if (text.length < 30) return status('⚠️ Primero elige tu archivo o pega el texto de tu biblia.', 'bad');
+    const name = fileName || 'Texto pegado';
+    await runImport(m, text, name, status, e.target, bg);
+  };
+};
+async function runImport(m, text, fname, status, btn, bg) {
+  const max = isPremium() ? 150000 : 90000; const parts = splitDoc(text, max); const chars = text.length;
+  if (S.settings.cc?.token && !CC.ok) { status('<span class="spin"></span> Buscando tu Claude Code…'); await ccPing(); }
+  const viaCC = usingCC();
+  if (!viaCC && S.settings.cc?.token) status('⚠️ Tu puente de Claude Code está <b>apagado</b> (ábrelo con doble clic en “INICIAR PUENTE”). Mientras, sigo con copiar y pegar.', 'warn');
+  if (!isPremium() && !await confirmCost('Importar mi biblia', [aiLine(chars + 2500 * parts.length, Math.min(30000, Math.round(chars / 3)), 30000 * parts.length, `Leer “${fname}” (${Math.round(chars / 1000)}k caracteres${parts.length > 1 ? ', ' + parts.length + ' partes' : ''})`)])) return;
+  btn.disabled = true; const t0 = Date.now(); let timer = null;
+  try {
     let res = { bible: {}, characters: [], places: [], powers: [], objects: [], factions: [], timeline: [], canon: [] };
     for (let i = 0; i < parts.length; i++) {
-      if (btn) btn.innerHTML = `<span class="spin"></span> Leyendo ${parts.length > 1 ? `parte ${i + 1}/${parts.length}` : 'tu biblia'}…`;
+      const lbl = parts.length > 1 ? `parte ${i + 1} de ${parts.length}` : 'tu biblia';
+      clearInterval(timer);
+      const tick = () => { const s = Math.round((Date.now() - t0) / 1000); status(viaCC ? `<span class="spin"></span> 🔌 Tu Claude Code está leyendo ${lbl}… <b>${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}</b><br><span class="tiny">Puede tardar de 1 a 5 minutos según lo largo. No cierres esta ventana.</span>` : `${S.settings.cc?.token ? '⚠️ Tu puente de Claude Code está <b>apagado</b> (ábrelo con doble clic en “INICIAR PUENTE” para que sea automático). Mientras, ' : ''}<span class="spin"></span> esperando la respuesta de Claude para ${lbl}…`, S.settings.cc?.token ? 'warn' : ''); };
+      tick(); timer = setInterval(tick, 1000);
       const r = await aiJSON(importPrompt(m, parts[i], i + 1, parts.length), { max_tokens: 32000, temperature: 0.1, confirmed: true, title: parts.length > 1 ? `Importar biblia (parte ${i + 1} de ${parts.length})` : 'Importar mi biblia' });
       res = mergeImport(res, r);
     }
-    showImportReview(m, res, file.name);
-  }, 'Leyendo…');
-};
+    clearInterval(timer);
+    const n = ['characters', 'places', 'powers', 'objects', 'factions', 'timeline', 'canon'].reduce((a, k) => a + (res[k] || []).length, 0);
+    if (!n && !Object.values(res.bible || {}).some(Boolean)) { status('⚠️ Claude no encontró nada que acomodar. Revisa que el texto sea tu biblia e intenta de nuevo.', 'bad'); return; }
+    bg.close(); showImportReview(m, res, fname);
+  } catch (e) {
+    clearInterval(timer);
+    status(e.message === 'Cancelado' ? 'Cancelado.' : '⚠️ ' + esc(e.message) + '<br><span class="tiny">Intenta otra vez. Si sigue fallando, mándame una captura de este mensaje.</span>', e.message === 'Cancelado' ? '' : 'bad');
+  } finally { btn.disabled = false; }
+}
 const IMPORT_SECTIONS = [['characters', 'personajes'], ['places', 'lugares'], ['powers', 'poderes'], ['objects', 'objetos'], ['factions', 'facciones'], ['timeline', 'historia']];
 function showImportReview(m, res, fname) {
   const rows = []; // {sec, t, e, dupe, mode}

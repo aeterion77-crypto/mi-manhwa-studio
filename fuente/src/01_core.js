@@ -135,7 +135,7 @@ async function pullCloud() {
       dirty.add(m.id);
     }
     const { data: st } = await sb.from('user_settings').select('settings').maybeSingle();
-    if (st?.settings) { Object.assign(S.settings, st.settings); S.settings.spend ||= {}; S.settings.falPrices ||= {}; S.settings.audioPos ||= {}; S.settings.aiMode ||= 'premium'; await IDB.put('kv', 'settings', S.settings); }
+    if (st?.settings) { Object.assign(S.settings, st.settings); S.settings.spend ||= {}; S.settings.falPrices ||= {}; S.settings.audioPos ||= {}; S.settings.aiMode ||= 'premium'; await IDB.put('kv', 'settings', S.settings); if (S.settings.cc?.token && typeof ccStartPolling === 'function') ccStartPolling(); }
     if (dirty.size) await pushDirty(); else setSync('ok', 'Sincronizado');
   } catch (e) { console.warn(e); setSync('err', 'No se pudo sincronizar'); }
 }
