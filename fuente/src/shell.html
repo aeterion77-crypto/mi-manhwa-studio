@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#121212">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" href="favicon.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Manhwa Studio">
+<title>MI MANHWA STUDIO</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Bangers&family=Comic+Neue:wght@700&family=Noto+Sans+KR:wght@700;900&family=Anton&family=Bebas+Neue&family=Permanent+Marker&family=Black+Han+Sans&family=Montserrat:wght@900&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/lamejs@1.2.1/lame.min.js"></script>
+<style>
+/*CSS*/
+</style>
+</head>
+<body>
+<div id="app">
+  <nav id="side"></nav>
+  <div id="scrim" data-a="closeMenu"></div>
+  <div id="main">
+    <header id="top">
+      <button id="menuBtn" class="icon ghost" data-a="openMenu" aria-label="Menú">☰</button>
+      <div class="searchbox"><span>🔎</span><input id="gsearch" type="search" placeholder="Buscar en todos tus manhwas… (ej. Kael)" autocomplete="off"></div>
+      <div class="sync" id="sync"><i></i><span>Solo en este dispositivo</span></div>
+    </header>
+    <main id="view"></main>
+  </div>
+</div>
+<div id="modals"></div>
+<div id="toasts"></div>
+<script>
+/*JS*/
+</script>
+</body>
+</html>
