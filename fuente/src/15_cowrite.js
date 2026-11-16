@@ -17,6 +17,12 @@ function coWriteHTML(m, c) {
       <label class="f">📝 Nota para Claude (estilo y tono de este capítulo)<input ${bindAttr(s, 'note')} value="${esc(s.note)}" placeholder="Ej. narración en tercera persona, oscuro, frases cortas, mucho diálogo"></label>
       <label class="f">🎯 ¿Qué quieres que pase ahora? (opcional)<input id="stWant" value="${esc(s.want || '')}" placeholder="Ej. Lira llega y detiene a Draven"></label>
     </div>
+    <div class="stfull row" style="margin:6px 0 10px">
+      <span class="small"><b>Dos formas:</b></span>
+      <button class="pri" data-a="stFull">📝 Escribir el capítulo COMPLETO</button>
+      <select id="stLen" style="width:auto">${[['corto', 'Corto (~1,500 palabras)'], ['normal', 'Normal (~3,000 palabras)'], ['largo', 'Largo (~5,000 palabras)']].map(([v, l]) => `<option value="${v}" ${(s.len || 'normal') === v ? 'selected' : ''}>${l}</option>`).join('')}</select>
+      <span class="small muted">o escribe junto con Claude párrafo por párrafo con ✨ Continuar (abajo).</span>
+    </div>
     <textarea id="stTxt" class="sttxt" spellcheck="true" placeholder="Empieza a escribir tu capítulo aquí… o toca ✨ Continuar y Claude empieza.">${esc(s.text)}</textarea>
     <div class="row" style="margin-top:8px">
       <button class="pri" data-a="stCont">✨ Continuar</button>
@@ -170,3 +176,45 @@ function wkTip(k, txt) {
   const W = WK[k];
   return `<div class="wktip"><span style="font-size:22px">${W.icon}</span><div class="grow small">Aquí trabaja <b>${W.name}</b>: ${txt}</div><a class="tiny" data-a="go" data-to="#/trabajadores" style="cursor:pointer;white-space:nowrap">ver los 4 →</a></div>`;
 }
+
+/* ---------- 📝 Capítulo completo ---------- */
+function prevChapterTail(m, c) {
+  const prev = chapterList(m).filter(x => Number(x.number) < Number(c.number)).pop(); if (!prev) return '';
+  const t = (prev.story?.text || prev.novel || '').trim();
+  return t ? `FINAL DEL CAPÍTULO ANTERIOR (Cap ${prev.number}${prev.title ? ' "' + prev.title + '"' : ''}), para que este siga sin saltos:\n"""\n${t.slice(-4000)}\n"""` : (prev.summary ? `CAPÍTULO ANTERIOR (Cap ${prev.number}): ${prev.summary}` : '');
+}
+ACT.stFull = async el => {
+  const m = cur(); const c = chapterById(m, Route.a); stSync(m, c); const s = story(c);
+  const len = $('#stLen')?.value || 'normal'; s.len = len; const words = { corto: 1500, normal: 3000, largo: 5000 }[len];
+  const want = ($('#stWant')?.value || '').trim(); s.want = want;
+  if (!c.premise?.trim() && !want && !s.text.trim()) {
+    const p = await promptBox('📝 ¿De qué trata este capítulo?', '', { label: 'Dímelo normal, ej. "Kael pierde el control de su Resonancia frente a toda la academia y Draven lo ve"', multiline: true, ok: 'Escribir capítulo' });
+    if (!p) return; c.premise = p; touch(m);
+  }
+  let mode = 'new';
+  if (s.text.trim()) {
+    mode = await choiceBox('📝 Ya tienes texto en este capítulo', '¿Qué hago con lo que ya escribiste?', [{ label: '➕ Seguir desde ahí hasta terminar el capítulo', value: 'finish', cls: 'pri' }, { label: '🔁 Reemplazarlo con un capítulo nuevo', value: 'new' }, { label: 'Cancelar', value: null }]);
+    if (!mode) return;
+  }
+  const finish = mode === 'finish';
+  const prompt = `Eres el escritor de este manhwa/novela. ${finish ? `Termina el Capítulo ${c.number} continuando EXACTAMENTE desde donde quedó el texto del autor, hasta cerrar el capítulo.` : `Escribe el Capítulo ${c.number}${c.title ? ' "' + c.title + '"' : ''} COMPLETO, de principio a fin.`}
+Largo: unas ${words} palabras${finish ? ' nuevas' : ''}. En español. Prosa de novela con escenas, diálogos con raya (—), emociones y descripciones visuales (después se convertirá en paneles de manhwa).
+Debe respetar TODO el cerebro: personalidades, poderes y sus costos, reglas del mundo, fichas canon, quién está vivo o muerto, relaciones y lo que pasó en capítulos anteriores. No contradigas nada. No inventes personajes importantes nuevos salvo que haga falta (y que sean coherentes).
+Estructura: un inicio que enganche, desarrollo con tensión creciente y un final que deje ganas de leer el siguiente capítulo.
+${c.premise ? 'QUÉ PASA EN ESTE CAPÍTULO (según el autor): ' + c.premise : ''}
+${want ? 'ADEMÁS EL AUTOR QUIERE: ' + want : ''}
+
+${stCtx(m, c)}
+
+${prevChapterTail(m, c)}
+${finish ? `\nTEXTO DEL AUTOR HASTA AHORA (sigue su estilo exacto):\n"""\n${s.text.slice(-15000)}\n"""` : ''}
+
+Responde SOLO con el texto del capítulo, sin título, sin comentarios y sin notas.`;
+  const out = cleanGen(await stCall(m, c, el, prompt, finish ? `Terminar Cap ${c.number}` : `Escribir Cap ${c.number} completo`, Math.min(32000, Math.round(words * 2.6) + 1500)));
+  if (!out) return;
+  stSnap(c);
+  if (finish) { const sep = /\n$/.test(s.text) ? '\n' : '\n\n'; const start = s.text.length + sep.length; s.text += sep + out; s.last = { start, end: s.text.length }; }
+  else { s.text = out; s.last = { start: 0, end: out.length }; }
+  s.focus = true; touch(m); render();
+  toast(`📝 Capítulo ${finish ? 'terminado' : 'escrito'}: ${out.split(/\s+/).length.toLocaleString('es')} palabras. Edítalo, pídele cambios, o conviértelo en guion.`, 'ok');
+};
