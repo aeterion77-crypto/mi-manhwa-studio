@@ -354,6 +354,8 @@ input[type=radio],input[type=checkbox]{width:20px;min-height:20px;height:20px;fl
 .mdtext{min-height:70vh;font-size:16.5px;line-height:1.75;white-space:pre-wrap}
 .mdbar .alert{margin-bottom:8px}
 
+.gxgroup{margin:10px 0 2px;font-weight:700;color:var(--neon);font-size:14px}
+
 </style>
 </head>
 <body>
@@ -510,6 +512,7 @@ async function pullCloud() {
     }
     const { data: st } = await sb.from('user_settings').select('settings').maybeSingle();
     if (st?.settings) { Object.assign(S.settings, st.settings); S.settings.spend ||= {}; S.settings.falPrices ||= {}; S.settings.audioPos ||= {}; S.settings.aiMode ||= 'premium'; await IDB.put('kv', 'settings', S.settings); if (S.settings.cc?.token && typeof ccStartPolling === 'function') ccStartPolling(); }
+    if (typeof master === 'function') for (const m of Object.values(S.manhwas)) if (!m.sample && m.bible && !m.bible.master) { master(m); m.updatedAt = Date.now(); await IDB.put('manhwas', m.id, m); dirty.add(m.id); }
     if (dirty.size) await pushDirty(); else setSync('ok', 'Sincronizado');
   } catch (e) { console.warn(e); setSync('err', 'No se pudo sincronizar'); }
 }
@@ -5521,12 +5524,14 @@ function gxReview(m, q, r, opts = {}) {
     if (x.op === 'replace') { if (!x.find || !f.v.includes(x.find) || x.find === x.replace) continue; items.push({ ...x, label: f.l, before: x.find, after: x.replace }); }
     else if (x.op === 'set') { if (String(x.value ?? '') === f.v) continue; items.push({ ...x, label: f.l, before: f.v, after: String(x.value ?? '') }); }
   }
+  const isD = it => it.op === 'doc_replace' || it.op === 'doc_insert'; items.sort((a, b) => isD(b) - isD(a));
+  const nDoc = items.filter(isD).length;
   const cut = s => esc(String(s).length > 400 ? String(s).slice(0, 400) + '…' : s);
   const bg = modal(`<h2>🪄 Cambios para: “${esc(q.length > 120 ? q.slice(0, 120) + "…" : q)}”</h2>
     ${r.entendi ? `<p class="small"><b>Entendí:</b> ${esc(r.entendi)}</p>` : ''}
     ${r.dudas ? `<div class="alert warn small"><div><b>Ojo:</b> ${esc(r.dudas)}</div></div>` : ''}
     ${items.length ? `<p class="small muted">${items.length} cambios. Desmarca los que no quieras. Los paneles que cambien quedan sin aprobar para que los revises antes de dibujarlos otra vez.</p>
-    <div style="max-height:58vh;overflow:auto">${items.map((it, i) => `<label class="row nw gxrow" style="align-items:flex-start;border-top:1px solid var(--line);padding:8px 0"><input type="checkbox" data-g="${i}" checked style="margin-top:4px"><div class="grow small"><b>${esc(it.label)}</b>${it.why ? ` <span class="tiny dim">· ${esc(it.why)}</span>` : ''}
+    <div style="max-height:58vh;overflow:auto">${items.map((it, i) => `${i === 0 && nDoc ? '<div class="gxgroup">1 · 📜 Primero se escribe en tu biblia</div>' : ''}${i === nDoc && i < items.length ? `<div class="gxgroup">${nDoc ? '2 · ' : ''}🔄 ${opts.onlyDoc ? 'Otros' : 'Y de ahí se reparte a'}</div>` : ''}<label class="row nw gxrow" style="align-items:flex-start;border-top:1px solid var(--line);padding:8px 0"><input type="checkbox" data-g="${i}" checked style="margin-top:4px"><div class="grow small"><b>${esc(it.label)}</b>${it.why ? ` <span class="tiny dim">· ${esc(it.why)}</span>` : ''}
       ${it.list ? `<div class="tiny muted" style="margin-top:4px">📍 ${cut(it.before)} → <b>${cut(it.after)}</b></div>` : `<div class="gxdiff"><div class="gxb">${cut(it.before)}</div><div class="gxa">${cut(it.after)}</div></div>`}</div></label>`).join('')}</div>`
       : '<div class="alert info"><div>Claude no encontró nada que cambiar. Intenta decirlo de otra forma o con más detalle.</div></div>'}
     <div class="acts"><button data-x="no">Cancelar</button>${items.length ? '<button class="pri" data-x="ok">✔ HACER LOS CAMBIOS MARCADOS</button>' : ''}</div>`, { wide: true });
@@ -5555,6 +5560,7 @@ function gxReview(m, q, r, opts = {}) {
       else if (gxSet(m, it.path, it.after)) { n++; touched.add(it.path); }
     }
     const pans = [...touched].filter(p => p.startsWith('pan.')).map(p => p.split('.').slice(1, 3).join('.')); const withImg = new Set(pans.filter(k => { const [c, p] = k.split('.'); return chapterById(m, c)?.panels.find(x => x.id === p)?.imageId; }));
+    let autoDoc = 0; if (!opts.noDoc && !opts.onlyDoc && !sel.some(it => it.op === 'doc_replace' || it.op === 'doc_insert') && snapDiff(m).length) { bg.remove(); autoDoc = await mdAutoWrite(m); n += autoDoc; }
     if (opts.after) opts.after(); else if (!wasPending) mdSynced(m); else master(m).snap = fieldsSnap(m);
     (m.changeLog ||= []).unshift({ at: Date.now(), text: q, n }); m.changeLog = m.changeLog.slice(0, 30);
     touch(m); bg.remove(); const qi = $('#gxQ'); if (qi) qi.value = ''; render();
@@ -5817,7 +5823,10 @@ ACT.mdSync = async el => {
 ACT.mdPull = async el => {
   const m = cur(); const M = master(m); const ch = snapDiff(m); if (!ch.length) return;
   const heads = docHeads(M.text);
-  let r; await busy(el, async () => { r = await aiJSON(`Eres el editor del documento de la biblia de "${m.name}". El autor cambió estas cosas directamente en las fichas de la app y ahora hay que ESCRIBIRLAS EN SU DOCUMENTO para que su biblia esté al día. Respeta su forma de escribir y ponlas en la parte que corresponde.
+  let r; await busy(el, async () => { r = await aiJSON(mdPullPrompt(m, ch), { max_tokens: 12000, temperature: 0.2, title: 'Pasar cambios a mi biblia' }); }, 'Escribiendo en tu biblia…');
+  if (!r) return; gxReview(m, 'Pasar a mi biblia lo que cambié en las fichas', r, { onlyDoc: true, after: () => { M.snap = fieldsSnap(m); M.syncedText = M.text; } });
+};
+function mdPullPrompt(m, ch) { const M = master(m); const heads = docHeads(M.text); return `Eres el editor del documento de la biblia de "${m.name}". El autor cambió estas cosas en su manhwa y ahora hay que ESCRIBIRLAS EN SU DOCUMENTO DE LA BIBLIA para que esté al día. Respeta su forma de escribir y ponlas en la parte que corresponde.
 
 CAMBIOS EN LAS FICHAS:
 ${ch.slice(0, 80).map(x => `- ${x.l}: «${String(x.before).slice(0, 600)}» → «${String(x.after).slice(0, 1500)}»`).join('\n')}
@@ -5831,9 +5840,16 @@ ${docParas(M.text, ch.map(x => x.l + ' ' + x.before + ' ' + x.after).join(' '), 
 Operaciones (solo sobre el documento):
 - {"op":"doc_replace","find":"texto EXACTO del documento","replace":"texto nuevo","why":""}
 - {"op":"doc_insert","after":"texto EXACTO del documento (por ej. el título de la parte) después del cual va","text":"lo nuevo","why":""}
-Responde SOLO JSON: {"entendi":"","cambios":[…],"dudas":""}`, { max_tokens: 12000, temperature: 0.2, title: 'Pasar cambios a mi biblia' }); }, 'Escribiendo en tu biblia…');
-  if (!r) return; gxReview(m, 'Pasar a mi biblia lo que cambié en las fichas', r, { onlyDoc: true, after: () => { M.snap = fieldsSnap(m); M.syncedText = M.text; } });
-};
+Responde SOLO JSON: {"entendi":"","cambios":[…],"dudas":""}`; }
+/* si un cambio llegó a las fichas pero no a la biblia, se escribe en la biblia sí o sí */
+async function mdAutoWrite(m) {
+  const ch = snapDiff(m); if (!ch.length) return 0;
+  const tt = toast('📜 Escribiendo el cambio en tu biblia…');
+  let r; try { r = await aiJSON(mdPullPrompt(m, ch), { max_tokens: 12000, temperature: 0.2, title: 'Escribir el cambio en mi biblia' }); } catch (e) { toast('No pude escribirlo en tu biblia: ' + e.message + '. Abre tu biblia y toca “Ponerlas en mi biblia”.', 'err'); return 0; }
+  let n = 0; for (const x of r?.cambios || []) if ((x.op === 'doc_replace' || x.op === 'doc_insert') && docApply(m, x)) n++;
+  if (!n) { const M = master(m); M.text = M.text.replace(/\s*$/, '') + '\n\n' + ch.map(x => `${x.l}: ${x.after}`).join('\n'); n = 1; }
+  return n;
+}
 ACT.mdRebuild = async () => { const m = cur(); const M = master(m); if (!await confirmBox('Esto escribe tu biblia de nuevo usando lo que tiene la app (fichas, secciones, capítulos). Tu documento actual se guarda en “Versiones que subiste”. ¿Seguir?', { ok: 'Rehacer', danger: false })) return; (m.bible.sources ||= []).push({ id: uid('doc_'), name: 'Respaldo antes de rehacer', text: M.text, at: Date.now() }); M.text = composeDoc(m); M.from = 'generado'; mdSynced(m); touch(m); render(); toast('📜 Documento rehecho', 'ok'); };
 ACT.dlMaster = async el => { const m = cur(); const M = master(m); await busy(el, async () => { await docxLib(); const { P, H } = D(); const blocks = M.text.split('\n').map(l => { const t = l.trim(); if (!t) return P(''); if (isHead(t)) return H(t.replace(/^#+\s*/, ''), t === t.toUpperCase() ? 1 : 2); return P(t.replace(/^[-•*]\s+/, '• ')); }); downloadBlob(await makeDocx('Biblia - ' + m.name, blocks), `Biblia - ${fileSafe(m.name)}.docx`); toast('📜 Tu biblia descargada en Word ✔', 'ok'); }, 'Creando Word…'); };
 const isHead = t => /^#+\s/.test(t) || (t.length < 70 && !/[.,;:]$/.test(t) && (t === t.toUpperCase() && /[A-ZÁÉÍÓÚÑ]/.test(t) || /^(cap[ií]tulo|parte|libro|arco|acto)\b/i.test(t)));

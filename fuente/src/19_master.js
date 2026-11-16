@@ -85,7 +85,10 @@ ACT.mdSync = async el => {
 ACT.mdPull = async el => {
   const m = cur(); const M = master(m); const ch = snapDiff(m); if (!ch.length) return;
   const heads = docHeads(M.text);
-  let r; await busy(el, async () => { r = await aiJSON(`Eres el editor del documento de la biblia de "${m.name}". El autor cambió estas cosas directamente en las fichas de la app y ahora hay que ESCRIBIRLAS EN SU DOCUMENTO para que su biblia esté al día. Respeta su forma de escribir y ponlas en la parte que corresponde.
+  let r; await busy(el, async () => { r = await aiJSON(mdPullPrompt(m, ch), { max_tokens: 12000, temperature: 0.2, title: 'Pasar cambios a mi biblia' }); }, 'Escribiendo en tu biblia…');
+  if (!r) return; gxReview(m, 'Pasar a mi biblia lo que cambié en las fichas', r, { onlyDoc: true, after: () => { M.snap = fieldsSnap(m); M.syncedText = M.text; } });
+};
+function mdPullPrompt(m, ch) { const M = master(m); const heads = docHeads(M.text); return `Eres el editor del documento de la biblia de "${m.name}". El autor cambió estas cosas en su manhwa y ahora hay que ESCRIBIRLAS EN SU DOCUMENTO DE LA BIBLIA para que esté al día. Respeta su forma de escribir y ponlas en la parte que corresponde.
 
 CAMBIOS EN LAS FICHAS:
 ${ch.slice(0, 80).map(x => `- ${x.l}: «${String(x.before).slice(0, 600)}» → «${String(x.after).slice(0, 1500)}»`).join('\n')}
@@ -99,9 +102,16 @@ ${docParas(M.text, ch.map(x => x.l + ' ' + x.before + ' ' + x.after).join(' '), 
 Operaciones (solo sobre el documento):
 - {"op":"doc_replace","find":"texto EXACTO del documento","replace":"texto nuevo","why":""}
 - {"op":"doc_insert","after":"texto EXACTO del documento (por ej. el título de la parte) después del cual va","text":"lo nuevo","why":""}
-Responde SOLO JSON: {"entendi":"","cambios":[…],"dudas":""}`, { max_tokens: 12000, temperature: 0.2, title: 'Pasar cambios a mi biblia' }); }, 'Escribiendo en tu biblia…');
-  if (!r) return; gxReview(m, 'Pasar a mi biblia lo que cambié en las fichas', r, { onlyDoc: true, after: () => { M.snap = fieldsSnap(m); M.syncedText = M.text; } });
-};
+Responde SOLO JSON: {"entendi":"","cambios":[…],"dudas":""}`; }
+/* si un cambio llegó a las fichas pero no a la biblia, se escribe en la biblia sí o sí */
+async function mdAutoWrite(m) {
+  const ch = snapDiff(m); if (!ch.length) return 0;
+  const tt = toast('📜 Escribiendo el cambio en tu biblia…');
+  let r; try { r = await aiJSON(mdPullPrompt(m, ch), { max_tokens: 12000, temperature: 0.2, title: 'Escribir el cambio en mi biblia' }); } catch (e) { toast('No pude escribirlo en tu biblia: ' + e.message + '. Abre tu biblia y toca “Ponerlas en mi biblia”.', 'err'); return 0; }
+  let n = 0; for (const x of r?.cambios || []) if ((x.op === 'doc_replace' || x.op === 'doc_insert') && docApply(m, x)) n++;
+  if (!n) { const M = master(m); M.text = M.text.replace(/\s*$/, '') + '\n\n' + ch.map(x => `${x.l}: ${x.after}`).join('\n'); n = 1; }
+  return n;
+}
 ACT.mdRebuild = async () => { const m = cur(); const M = master(m); if (!await confirmBox('Esto escribe tu biblia de nuevo usando lo que tiene la app (fichas, secciones, capítulos). Tu documento actual se guarda en “Versiones que subiste”. ¿Seguir?', { ok: 'Rehacer', danger: false })) return; (m.bible.sources ||= []).push({ id: uid('doc_'), name: 'Respaldo antes de rehacer', text: M.text, at: Date.now() }); M.text = composeDoc(m); M.from = 'generado'; mdSynced(m); touch(m); render(); toast('📜 Documento rehecho', 'ok'); };
 ACT.dlMaster = async el => { const m = cur(); const M = master(m); await busy(el, async () => { await docxLib(); const { P, H } = D(); const blocks = M.text.split('\n').map(l => { const t = l.trim(); if (!t) return P(''); if (isHead(t)) return H(t.replace(/^#+\s*/, ''), t === t.toUpperCase() ? 1 : 2); return P(t.replace(/^[-•*]\s+/, '• ')); }); downloadBlob(await makeDocx('Biblia - ' + m.name, blocks), `Biblia - ${fileSafe(m.name)}.docx`); toast('📜 Tu biblia descargada en Word ✔', 'ok'); }, 'Creando Word…'); };
 const isHead = t => /^#+\s/.test(t) || (t.length < 70 && !/[.,;:]$/.test(t) && (t === t.toUpperCase() && /[A-ZÁÉÍÓÚÑ]/.test(t) || /^(cap[ií]tulo|parte|libro|arco|acto)\b/i.test(t)));

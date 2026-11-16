@@ -135,12 +135,14 @@ function gxReview(m, q, r, opts = {}) {
     if (x.op === 'replace') { if (!x.find || !f.v.includes(x.find) || x.find === x.replace) continue; items.push({ ...x, label: f.l, before: x.find, after: x.replace }); }
     else if (x.op === 'set') { if (String(x.value ?? '') === f.v) continue; items.push({ ...x, label: f.l, before: f.v, after: String(x.value ?? '') }); }
   }
+  const isD = it => it.op === 'doc_replace' || it.op === 'doc_insert'; items.sort((a, b) => isD(b) - isD(a));
+  const nDoc = items.filter(isD).length;
   const cut = s => esc(String(s).length > 400 ? String(s).slice(0, 400) + '…' : s);
   const bg = modal(`<h2>🪄 Cambios para: “${esc(q.length > 120 ? q.slice(0, 120) + "…" : q)}”</h2>
     ${r.entendi ? `<p class="small"><b>Entendí:</b> ${esc(r.entendi)}</p>` : ''}
     ${r.dudas ? `<div class="alert warn small"><div><b>Ojo:</b> ${esc(r.dudas)}</div></div>` : ''}
     ${items.length ? `<p class="small muted">${items.length} cambios. Desmarca los que no quieras. Los paneles que cambien quedan sin aprobar para que los revises antes de dibujarlos otra vez.</p>
-    <div style="max-height:58vh;overflow:auto">${items.map((it, i) => `<label class="row nw gxrow" style="align-items:flex-start;border-top:1px solid var(--line);padding:8px 0"><input type="checkbox" data-g="${i}" checked style="margin-top:4px"><div class="grow small"><b>${esc(it.label)}</b>${it.why ? ` <span class="tiny dim">· ${esc(it.why)}</span>` : ''}
+    <div style="max-height:58vh;overflow:auto">${items.map((it, i) => `${i === 0 && nDoc ? '<div class="gxgroup">1 · 📜 Primero se escribe en tu biblia</div>' : ''}${i === nDoc && i < items.length ? `<div class="gxgroup">${nDoc ? '2 · ' : ''}🔄 ${opts.onlyDoc ? 'Otros' : 'Y de ahí se reparte a'}</div>` : ''}<label class="row nw gxrow" style="align-items:flex-start;border-top:1px solid var(--line);padding:8px 0"><input type="checkbox" data-g="${i}" checked style="margin-top:4px"><div class="grow small"><b>${esc(it.label)}</b>${it.why ? ` <span class="tiny dim">· ${esc(it.why)}</span>` : ''}
       ${it.list ? `<div class="tiny muted" style="margin-top:4px">📍 ${cut(it.before)} → <b>${cut(it.after)}</b></div>` : `<div class="gxdiff"><div class="gxb">${cut(it.before)}</div><div class="gxa">${cut(it.after)}</div></div>`}</div></label>`).join('')}</div>`
       : '<div class="alert info"><div>Claude no encontró nada que cambiar. Intenta decirlo de otra forma o con más detalle.</div></div>'}
     <div class="acts"><button data-x="no">Cancelar</button>${items.length ? '<button class="pri" data-x="ok">✔ HACER LOS CAMBIOS MARCADOS</button>' : ''}</div>`, { wide: true });
@@ -169,6 +171,7 @@ function gxReview(m, q, r, opts = {}) {
       else if (gxSet(m, it.path, it.after)) { n++; touched.add(it.path); }
     }
     const pans = [...touched].filter(p => p.startsWith('pan.')).map(p => p.split('.').slice(1, 3).join('.')); const withImg = new Set(pans.filter(k => { const [c, p] = k.split('.'); return chapterById(m, c)?.panels.find(x => x.id === p)?.imageId; }));
+    let autoDoc = 0; if (!opts.noDoc && !opts.onlyDoc && !sel.some(it => it.op === 'doc_replace' || it.op === 'doc_insert') && snapDiff(m).length) { bg.remove(); autoDoc = await mdAutoWrite(m); n += autoDoc; }
     if (opts.after) opts.after(); else if (!wasPending) mdSynced(m); else master(m).snap = fieldsSnap(m);
     (m.changeLog ||= []).unshift({ at: Date.now(), text: q, n }); m.changeLog = m.changeLog.slice(0, 30);
     touch(m); bg.remove(); const qi = $('#gxQ'); if (qi) qi.value = ''; render();

@@ -136,6 +136,7 @@ async function pullCloud() {
     }
     const { data: st } = await sb.from('user_settings').select('settings').maybeSingle();
     if (st?.settings) { Object.assign(S.settings, st.settings); S.settings.spend ||= {}; S.settings.falPrices ||= {}; S.settings.audioPos ||= {}; S.settings.aiMode ||= 'premium'; await IDB.put('kv', 'settings', S.settings); if (S.settings.cc?.token && typeof ccStartPolling === 'function') ccStartPolling(); }
+    if (typeof master === 'function') for (const m of Object.values(S.manhwas)) if (!m.sample && m.bible && !m.bible.master) { master(m); m.updatedAt = Date.now(); await IDB.put('manhwas', m.id, m); dirty.add(m.id); }
     if (dirty.size) await pushDirty(); else setSync('ok', 'Sincronizado');
   } catch (e) { console.warn(e); setSync('err', 'No se pudo sincronizar'); }
 }

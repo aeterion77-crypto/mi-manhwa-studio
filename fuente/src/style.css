@@ -331,3 +331,5 @@ input[type=radio],input[type=checkbox]{width:20px;min-height:20px;height:20px;fl
 
 .mdtext{min-height:70vh;font-size:16.5px;line-height:1.75;white-space:pre-wrap}
 .mdbar .alert{margin-bottom:8px}
+
+.gxgroup{margin:10px 0 2px;font-weight:700;color:var(--neon);font-size:14px}
