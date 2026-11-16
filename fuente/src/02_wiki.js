@@ -149,16 +149,15 @@ VIEWS.biblia = () => {
   return `<div class="head"><div><h1>🧠 ${esc(m.name)}</h1><p class="muted">La Biblia es la memoria total de este manhwa. Todo lo que escribas aquí lo usa la IA.</p></div>
     <div class="row"><button class="pri" data-a="importBible">📄 SUBIR MI BIBLIA (Word / PDF)</button><button class="pri" data-a="dlBible">📥 DESCARGAR MI BIBLIA (Word)</button><button class="pri" data-a="dlAll">📦 DESCARGAR TODO</button><button data-a="dlBibleOnly">⬇ Solo historia</button><button data-a="go" data-to="${mlink(m, 'caps')}">📖 Capítulos (${caps.length})</button><button data-a="go" data-to="${mlink(m, 'lector', 'novela')}">🎧 Leer como novela</button></div></div>
     <div class="alert info small" style="margin-bottom:14px"><div>📄 ¿Ya tienes tu biblia escrita? Súbela en Word (.docx), PDF o texto y reparto todo solo: historia, personajes, lugares, poderes, objetos, facciones, línea de tiempo y fichas canon. Tú revisas y apruebas antes de guardar.<br>📥 <b>Descargar mi biblia</b> crea un Word siempre actualizado con todo lo que tienes en la app (con fotos y LoRAs). <b>Descargar todo</b> agrega imágenes, videos, audios y archivos LoRA en un .zip. Cada personaje, lugar, sección, capítulo, imagen y video también tiene su propio botón ⬇.</div></div>
+    ${typeof haveHTML === 'function' ? haveHTML(m) : ''}
     ${typeof gxHTML === 'function' ? gxHTML(m) : ''}
     <div class="grid2">
-      <div class="panelbox"><h2>Historia</h2>
+      <div class="panelbox" id="sec-historia"><h2>🧠 Historia</h2>
         <label class="f">Nombre del manhwa<input ${bindAttr(m, 'name')} value="${esc(m.name)}"></label>
         <div class="grid2"><label class="f">Género<input ${bindAttr(b, 'genre')} value="${esc(b.genre)}"></label><label class="f">Tono<input ${bindAttr(b, 'tone')} value="${esc(b.tone)}"></label></div>
         <label class="f">Sinopsis<textarea ${bindAttr(b, 'synopsis')}>${esc(b.synopsis)}</textarea></label>
         <label class="f">Trama completa<textarea style="min-height:160px" ${bindAttr(b, 'plot')}>${esc(b.plot)}</textarea></label>
         <label class="f">Reglas del mundo<textarea style="min-height:120px" ${bindAttr(b, 'rules')}>${esc(b.rules)}</textarea></label>
-        <label class="f">🗂️ Otros apuntes (todo lo demás de tu biblia: temas, arcos, glosario, notas)<textarea style="min-height:120px" ${bindAttr(b, 'extras')}>${esc(b.extras || '')}</textarea></label>
-        ${(b.sources || []).length ? `<div class="small" style="margin-top:6px"><b>📄 Mis documentos originales</b>${b.sources.map(d => `<div class="row nw between" style="border-top:1px solid var(--line);padding:4px 0"><span>${esc(d.name)} <span class="muted">· ${fmtDate(d.at)} · ${Math.round(d.text.length / 1000)}k caracteres</span></span><span class="row nw"><button class="sm" data-a="srcView" data-id="${d.id}">👁 Ver</button><button class="sm" data-a="srcDl" data-id="${d.id}">⬇</button><button class="sm icon danger" data-a="srcDel" data-id="${d.id}">🗑️</button></span></div>`).join('')}</div>` : ''}
         <label class="f">Protagonista (para portadas)<select ${bindAttr(b, 'protagonistId')}><option value="">—</option>${m.characters.map(c => `<option value="${c.id}" ${b.protagonistId === c.id ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}</select></label>
       </div>
       <div class="col">
@@ -182,7 +181,9 @@ VIEWS.biblia = () => {
         ${m.plotIdeas.length ? `<div class="panelbox"><h3>Giros de trama guardados</h3>${m.plotIdeas.map(p => `<div class="row nw between"><div class="small"><b>${esc(p.name)}</b> — ${esc(p.description)}</div><button class="sm icon danger" data-a="delPlotIdea" data-id="${p.id}">🗑️</button></div>`).join('<hr>')}</div>` : ''}
         ${m.nameBank.length ? `<div class="panelbox"><h3>Banco de nombres</h3><div class="row">${m.nameBank.map(n => `<span class="chip">${esc(n.name)} <a href="#" data-a="delName" data-id="${n.id}">✕</a></span>`).join('')}</div></div>` : ''}
       </div>
-    </div>`;
+    </div>
+    ${typeof sectionsHTML === 'function' ? sectionsHTML(m) : ''}
+    ${(b.sources || []).length ? `<div class="panelbox" id="sec-docs" style="margin-top:16px"><h2 style="margin-top:0">📄 Mi documento original (guardado completo)</h2><p class="small muted">Tu biblia tal cual la subiste, palabra por palabra. Aunque algo no se haya acomodado, aquí está todo.</p>${b.sources.map(d => `<div class="row nw between" style="border-top:1px solid var(--line);padding:6px 0"><span>${esc(d.name)} <span class="muted small">· ${fmtDate(d.at)} · ${d.text.split(/\s+/).length.toLocaleString('es')} palabras</span></span><span class="row nw"><button class="sm" data-a="srcView" data-id="${d.id}">👁 Ver</button><button class="sm" data-a="srcDl" data-id="${d.id}">⬇</button><button class="sm icon danger" data-a="srcDel" data-id="${d.id}">🗑️</button></span></div>`).join('')}</div>` : ''}`;
 };
 ACT.delPlotIdea = async el => { const m = cur(); if (!await confirmBox('¿Borrar este giro de trama?')) return; m.plotIdeas = m.plotIdeas.filter(x => x.id !== el.dataset.id); touch(m); render(); };
 ACT.delName = el => { const m = cur(); m.nameBank = m.nameBank.filter(x => x.id !== el.dataset.id); touch(m); render(); };

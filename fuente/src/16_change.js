@@ -16,7 +16,8 @@ const gxHit = (txt, kw) => { const t = norm(txt || ''); return kw.some(k => t.in
 /* Todo lo editable del manhwa, con su "dirección" */
 function gxFields(m) {
   const F = []; const add = (p, l, v, long = false) => { if (v != null && String(v).trim() !== '') F.push({ p, l, v: String(v), long }); };
-  const b = m.bible; [['synopsis', 'Sinopsis'], ['plot', 'Trama completa'], ['rules', 'Reglas del mundo'], ['genre', 'Género'], ['tone', 'Tono'], ['extras', 'Otros apuntes']].forEach(([k, l]) => add('bible.' + k, 'Biblia · ' + l, b[k], ['plot', 'extras'].includes(k)));
+  const b = m.bible; [['synopsis', 'Sinopsis'], ['plot', 'Trama completa'], ['rules', 'Reglas del mundo'], ['genre', 'Género'], ['tone', 'Tono']].forEach(([k, l]) => add('bible.' + k, 'Biblia · ' + l, b[k], k === 'plot'));
+  for (const s of b.sections || []) { add(`sec.${s.id}.title`, `${s.icon} Sección · nombre`, s.title); add(`sec.${s.id}.text`, `${s.icon} ${s.title}`, s.text, s.text.length > 1500); }
   for (const t of Object.keys(TYPES)) { const T = TYPES[t]; for (const e of m[T.key] || []) for (const [k, l] of T.fields) if (!['loraId', 'loraWeight'].includes(k)) add(`ent.${e.id}.${k}`, `${T.icon} ${e.name} · ${l}`, e[k]); }
   for (const f of m.canon || []) { add(`canon.${f.id}.entity`, `📌 Ficha canon · quién`, f.entity); add(`canon.${f.id}.attribute`, `📌 ${f.entity} · atributo`, f.attribute); add(`canon.${f.id}.value`, `📌 ${f.entity} · ${f.attribute}`, f.value); add(`canon.${f.id}.note`, `📌 ${f.entity} · nota`, f.note); }
   for (const c of chapterList(m)) {
@@ -36,6 +37,7 @@ function gxGet(m, path) { return gxFields(m).find(f => f.p === path)?.v ?? ''; }
 function gxSet(m, path, val) {
   const [kind, a, b, c] = path.split('.');
   if (kind === 'bible') { m.bible[a] = val; return true; }
+  if (kind === 'sec') { const s = (m.bible.sections || []).find(x => x.id === a); if (!s) return false; s[b] = val; return true; }
   if (kind === 'ent') { const e = findEntity(m, a); if (!e) return false; const T = TYPES[findEntityType(m, a)]; const ty = T.fields.find(f => f[0] === b)?.[2]; e[b] = ty === 'num' ? (Number(val) || 0) : val; return true; }
   if (kind === 'canon') { const f = m.canon.find(x => x.id === a); if (!f) return false; f[b] = val; return true; }
   const ch = chapterById(m, a); if (!ch) return false;

@@ -322,6 +322,15 @@ input[type=radio],input[type=checkbox]{width:20px;min-height:20px;height:20px;fl
 .gxdiff{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:4px}.gxb,.gxa{padding:6px 8px;border-radius:8px;white-space:pre-wrap;word-break:break-word}.gxb{background:rgba(255,80,80,.10);text-decoration:line-through;opacity:.8}.gxa{background:rgba(60,220,140,.12)}
 @media(max-width:700px){.gxdiff{grid-template-columns:1fr}}
 
+.havegrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:8px}
+.havetile{display:flex;gap:10px;align-items:center;padding:10px 12px;border:1px solid var(--line);border-radius:12px;background:rgba(255,255,255,.02);cursor:pointer;color:inherit;text-decoration:none;transition:.15s}
+.havetile:hover{border-color:var(--neon);background:rgba(180,77,255,.08)}
+.havetile.empty{opacity:.55}
+.secgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:12px}
+.secbox .sectext{margin-top:8px;max-height:420px;overflow:auto;line-height:1.6}
+.sectext p{margin:0 0 6px}.sectext h4{margin:10px 0 4px;color:var(--neon)}.sectext ul{margin:4px 0 8px;padding-left:20px}
+.flash{box-shadow:0 0 0 3px var(--neon)!important;transition:box-shadow .3s}
+
 </style>
 </head>
 <body>
@@ -893,7 +902,8 @@ function brain(m, { maxChars = 50000, skipChapterId = null } = {}) {
   if (b.synopsis) L.push(`Sinopsis: ${b.synopsis}`);
   if (b.plot) L.push(`Trama completa: ${b.plot}`);
   if (b.rules) L.push(`Reglas del mundo: ${b.rules}`);
-  if (b.extras) L.push(`Otros apuntes del autor:\n${String(b.extras).slice(0, 15000)}`);
+  if (b.extras) L.push(`Apuntes del autor:\n${String(b.extras).slice(0, 15000)}`);
+  for (const s of b.sections || []) if (s.text) L.push(`\n## ${String(s.title).toUpperCase()}\n${String(s.text).slice(0, 6000)}`);
   const ent = (title, arr, fn) => { if (arr?.length) { L.push(`\n## ${title}`); arr.forEach(x => L.push('- ' + fn(x))); } };
   const nm = id => findEntity(m, id)?.name || '?';
   ent('PERSONAJES', m.characters, c => [c.name, c.nickname && `apodo "${c.nickname}"`, c.age && `${c.age} años`, c.role, c.status && `estado: ${c.status}`, c.power && `poder: ${c.power}`, c.weakness && `debilidad: ${c.weakness}`, c.trauma && `trauma: ${c.trauma}`, c.goal && `objetivo: ${c.goal}`, c.appearance && `apariencia: ${c.appearance}`, (c.relations || []).length && 'relaciones: ' + c.relations.map(r => `${r.kind} de ${nm(r.target)}`).join(', ')].filter(Boolean).join(' · '));
@@ -1063,16 +1073,15 @@ VIEWS.biblia = () => {
   return `<div class="head"><div><h1>🧠 ${esc(m.name)}</h1><p class="muted">La Biblia es la memoria total de este manhwa. Todo lo que escribas aquí lo usa la IA.</p></div>
     <div class="row"><button class="pri" data-a="importBible">📄 SUBIR MI BIBLIA (Word / PDF)</button><button class="pri" data-a="dlBible">📥 DESCARGAR MI BIBLIA (Word)</button><button class="pri" data-a="dlAll">📦 DESCARGAR TODO</button><button data-a="dlBibleOnly">⬇ Solo historia</button><button data-a="go" data-to="${mlink(m, 'caps')}">📖 Capítulos (${caps.length})</button><button data-a="go" data-to="${mlink(m, 'lector', 'novela')}">🎧 Leer como novela</button></div></div>
     <div class="alert info small" style="margin-bottom:14px"><div>📄 ¿Ya tienes tu biblia escrita? Súbela en Word (.docx), PDF o texto y reparto todo solo: historia, personajes, lugares, poderes, objetos, facciones, línea de tiempo y fichas canon. Tú revisas y apruebas antes de guardar.<br>📥 <b>Descargar mi biblia</b> crea un Word siempre actualizado con todo lo que tienes en la app (con fotos y LoRAs). <b>Descargar todo</b> agrega imágenes, videos, audios y archivos LoRA en un .zip. Cada personaje, lugar, sección, capítulo, imagen y video también tiene su propio botón ⬇.</div></div>
+    ${typeof haveHTML === 'function' ? haveHTML(m) : ''}
     ${typeof gxHTML === 'function' ? gxHTML(m) : ''}
     <div class="grid2">
-      <div class="panelbox"><h2>Historia</h2>
+      <div class="panelbox" id="sec-historia"><h2>🧠 Historia</h2>
         <label class="f">Nombre del manhwa<input ${bindAttr(m, 'name')} value="${esc(m.name)}"></label>
         <div class="grid2"><label class="f">Género<input ${bindAttr(b, 'genre')} value="${esc(b.genre)}"></label><label class="f">Tono<input ${bindAttr(b, 'tone')} value="${esc(b.tone)}"></label></div>
         <label class="f">Sinopsis<textarea ${bindAttr(b, 'synopsis')}>${esc(b.synopsis)}</textarea></label>
         <label class="f">Trama completa<textarea style="min-height:160px" ${bindAttr(b, 'plot')}>${esc(b.plot)}</textarea></label>
         <label class="f">Reglas del mundo<textarea style="min-height:120px" ${bindAttr(b, 'rules')}>${esc(b.rules)}</textarea></label>
-        <label class="f">🗂️ Otros apuntes (todo lo demás de tu biblia: temas, arcos, glosario, notas)<textarea style="min-height:120px" ${bindAttr(b, 'extras')}>${esc(b.extras || '')}</textarea></label>
-        ${(b.sources || []).length ? `<div class="small" style="margin-top:6px"><b>📄 Mis documentos originales</b>${b.sources.map(d => `<div class="row nw between" style="border-top:1px solid var(--line);padding:4px 0"><span>${esc(d.name)} <span class="muted">· ${fmtDate(d.at)} · ${Math.round(d.text.length / 1000)}k caracteres</span></span><span class="row nw"><button class="sm" data-a="srcView" data-id="${d.id}">👁 Ver</button><button class="sm" data-a="srcDl" data-id="${d.id}">⬇</button><button class="sm icon danger" data-a="srcDel" data-id="${d.id}">🗑️</button></span></div>`).join('')}</div>` : ''}
         <label class="f">Protagonista (para portadas)<select ${bindAttr(b, 'protagonistId')}><option value="">—</option>${m.characters.map(c => `<option value="${c.id}" ${b.protagonistId === c.id ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}</select></label>
       </div>
       <div class="col">
@@ -1096,7 +1105,9 @@ VIEWS.biblia = () => {
         ${m.plotIdeas.length ? `<div class="panelbox"><h3>Giros de trama guardados</h3>${m.plotIdeas.map(p => `<div class="row nw between"><div class="small"><b>${esc(p.name)}</b> — ${esc(p.description)}</div><button class="sm icon danger" data-a="delPlotIdea" data-id="${p.id}">🗑️</button></div>`).join('<hr>')}</div>` : ''}
         ${m.nameBank.length ? `<div class="panelbox"><h3>Banco de nombres</h3><div class="row">${m.nameBank.map(n => `<span class="chip">${esc(n.name)} <a href="#" data-a="delName" data-id="${n.id}">✕</a></span>`).join('')}</div></div>` : ''}
       </div>
-    </div>`;
+    </div>
+    ${typeof sectionsHTML === 'function' ? sectionsHTML(m) : ''}
+    ${(b.sources || []).length ? `<div class="panelbox" id="sec-docs" style="margin-top:16px"><h2 style="margin-top:0">📄 Mi documento original (guardado completo)</h2><p class="small muted">Tu biblia tal cual la subiste, palabra por palabra. Aunque algo no se haya acomodado, aquí está todo.</p>${b.sources.map(d => `<div class="row nw between" style="border-top:1px solid var(--line);padding:6px 0"><span>${esc(d.name)} <span class="muted small">· ${fmtDate(d.at)} · ${d.text.split(/\s+/).length.toLocaleString('es')} palabras</span></span><span class="row nw"><button class="sm" data-a="srcView" data-id="${d.id}">👁 Ver</button><button class="sm" data-a="srcDl" data-id="${d.id}">⬇</button><button class="sm icon danger" data-a="srcDel" data-id="${d.id}">🗑️</button></span></div>`).join('')}</div>` : ''}`;
 };
 ACT.delPlotIdea = async el => { const m = cur(); if (!await confirmBox('¿Borrar este giro de trama?')) return; m.plotIdeas = m.plotIdeas.filter(x => x.id !== el.dataset.id); touch(m); render(); };
 ACT.delName = el => { const m = cur(); m.nameBank = m.nameBank.filter(x => x.id !== el.dataset.id); touch(m); render(); };
@@ -4673,9 +4684,9 @@ Devuelve SOLO este JSON:
  "timeline": [{${f('historia')}}],
  "canon": [{"entity":"quién o qué","attribute":"atributo corto (cicatriz, color de ojos, edad, estado…)","value":"valor","since":número de capítulo o null}],
  "chapters": [{"number":número,"title":"","premise":"qué pasa en ese capítulo, completo"}],
- "extras": [{"title":"de qué trata","text":"el texto COPIADO tal cual del documento"}]
+ "sections": [{"title":"nombre corto de la sección (Temas, Arcos, Glosario, Estilo de dibujo, Música, Notas…)","icon":"un emoji","text":"todo el contenido de esa sección, COMPLETO y fiel al documento; ordénalo con '- ' para listas y '# ' para subtítulos si ayuda"}]
 }
-MUY IMPORTANTE: NADA del documento debe quedar fuera. Si el autor tiene un plan o resumen de capítulos, ponlo en "chapters". Todo lo que no quepa en otra sección (temas, arcos, glosario, notas, ideas sueltas, referencias, estilo de dibujo, cualquier otra cosa) va en "extras", copiado tal cual.
+MUY IMPORTANTE: NADA del documento debe quedar fuera. Si el autor tiene un plan o resumen de capítulos, ponlo en "chapters". Todo lo que no quepa en otra parte va en "sections": agrúpalo por tema, una sección por tema, con un nombre claro (ej. "Temas de la historia", "Arcos", "Glosario", "Estilo de dibujo", "Plan del final"), sin resumir ni perder nada.
 En "canon" pon solo hechos físicos o fijos importantes que no deben cambiar (marcas, colores, edades, quién murió y en qué capítulo, etc.).
 
 DOCUMENTO:
@@ -4683,7 +4694,7 @@ ${text}`;
 }
 function splitDoc(text, max) { if (text.length <= max) return [text]; const out = []; let i = 0; while (i < text.length) { let e = Math.min(text.length, i + max); if (e < text.length) { const p = text.lastIndexOf('\n\n', e); if (p > i + max * 0.5) e = p; } out.push(text.slice(i, e)); i = e; } return out; }
 function mergeImport(a, b) {
-  const out = { bible: { ...a.bible }, canon: [...(a.canon || []), ...(b.canon || [])], extras: [...(a.extras || []), ...(b.extras || [])], chapters: [...(a.chapters || [])] };
+  const out = { bible: { ...a.bible }, canon: [...(a.canon || []), ...(b.canon || [])], sections: [...(a.sections || []), ...(a.extras || []), ...(b.sections || []), ...(b.extras || [])], chapters: [...(a.chapters || [])] };
   for (const c of b.chapters || []) { const same = out.chapters.find(x => Number(x.number) === Number(c.number) && c.number != null); if (same) { if (c.premise) same.premise = same.premise ? same.premise + '\n' + c.premise : c.premise; same.title ||= c.title; } else out.chapters.push(c); }
   for (const [k, v] of Object.entries(b.bible || {})) if (v) out.bible[k] = out.bible[k] && out.bible[k] !== v ? out.bible[k] + '\n\n' + v : v;
   for (const key of ['characters', 'places', 'powers', 'objects', 'factions', 'timeline']) {
@@ -4739,7 +4750,7 @@ async function runImport(m, text, fname, status, btn, bg) {
       res = mergeImport(res, r);
     }
     clearInterval(timer);
-    const n = ['characters', 'places', 'powers', 'objects', 'factions', 'timeline', 'canon', 'chapters', 'extras'].reduce((a, k) => a + (res[k] || []).length, 0);
+    const n = ['characters', 'places', 'powers', 'objects', 'factions', 'timeline', 'canon', 'chapters', 'sections'].reduce((a, k) => a + (res[k] || []).length, 0);
     if (!n && !Object.values(res.bible || {}).some(Boolean)) { status('⚠️ Claude no encontró nada que acomodar. Revisa que el texto sea tu biblia e intenta de nuevo.', 'bad'); return; }
     bg.close(); showImportReview(m, res, fname, text);
   } catch (e) {
@@ -4749,7 +4760,7 @@ async function runImport(m, text, fname, status, btn, bg) {
 }
 const IMPORT_SECTIONS = [['characters', 'personajes'], ['places', 'lugares'], ['powers', 'poderes'], ['objects', 'objetos'], ['factions', 'facciones'], ['timeline', 'historia']];
 function showImportReview(m, res, fname, srcText = '') {
-  const extras = (res.extras || []).filter(x => x && (x.text || '').trim()); const caps = (res.chapters || []).filter(x => x && (x.premise || x.title));
+  const extras = [...(res.sections || []), ...(res.extras || [])].filter(x => x && (x.text || '').trim()); const caps = (res.chapters || []).filter(x => x && (x.premise || x.title));
   const rows = []; // {sec, t, e, dupe, mode}
   for (const [key, t] of IMPORT_SECTIONS) for (const e of res[key] || []) { if (!e?.name) continue; const dupe = (m[TYPES[t].key] || []).find(x => norm(x.name) === norm(e.name)); rows.push({ key, t, e, dupe, mode: dupe ? 'merge' : 'new' }); }
   const canon = (res.canon || []).filter(f => f.entity && f.attribute && f.value).map(f => ({ ...f, dupe: m.canon.some(c => norm(c.entity) === norm(f.entity) && norm(c.attribute) === norm(f.attribute)) }));
@@ -4760,7 +4771,7 @@ function showImportReview(m, res, fname, srcText = '') {
     <p class="small muted">Nada se guarda hasta que tú lo apruebes. Desmarca lo que no quieras. Si algo ya existe, elige si completarlo, reemplazarlo u omitirlo.</p>
     <div class="col" style="gap:10px;max-height:56vh;overflow:auto">
       ${caps.length ? `<div class="panelbox"><h3>📖 Plan de capítulos (${caps.length})</h3>${caps.map((c, i) => `<label class="row nw small"><input type="checkbox" data-capi="${i}" checked><span><b>Cap ${esc(c.number ?? '?')}${c.title ? ' · ' + esc(c.title) : ''}</b> <span class="muted">${esc(String(c.premise || '').slice(0, 140))}</span>${chapterByNum(m, c.number) ? ' <span class="chip warn">ya existe → completo lo vacío</span>' : ''}</span></label>`).join('')}</div>` : ''}
-      ${extras.length ? `<div class="panelbox"><h3>🗂️ Otros apuntes (${extras.length})</h3><p class="tiny dim">Lo que no cabe en otra sección. Se guarda en “Otros apuntes” de tu Biblia y Claude lo usa.</p>${extras.map((x, i) => `<label class="row nw small"><input type="checkbox" data-ext="${i}" checked><span><b>${esc(x.title || 'Apunte')}</b> <span class="muted">${esc(String(x.text).slice(0, 140))}</span></span></label>`).join('')}</div>` : ''}
+      ${extras.length ? `<div class="panelbox"><h3>📘 Secciones de tu biblia (${extras.length})</h3><p class="tiny dim">Temas, arcos, glosario, estilo… cada uno queda como su propia sección en tu Biblia, y Claude lo usa.</p>${extras.map((x, i) => `<label class="row nw small"><input type="checkbox" data-ext="${i}" checked><span><b>${esc(x.icon || secIcon(x.title || ''))} ${esc(x.title || 'Sección')}</b> <span class="muted">${esc(String(x.text).slice(0, 140))}</span></span></label>`).join('')}</div>` : ''}
       ${srcText ? `<div class="alert ok small"><div>📄 Tu documento original completo (${srcText.length.toLocaleString('es')} caracteres) también se guarda tal cual en tu Biblia, para que nada se pierda.</div></div>` : ''}
       ${bibleF.length ? `<div class="panelbox"><h3>🧠 Biblia</h3>${bibleF.map(([k, l]) => `<label class="row nw small"><input type="checkbox" data-bib="${k}" checked><div class="grow"><b>${l}</b>${m.bible[k] ? ' <span class="chip warn">ya tienes texto: se agrega al final</span>' : ''}<div class="muted">${esc(String(res.bible[k]).slice(0, 220))}${String(res.bible[k]).length > 220 ? '…' : ''}</div></div></label>`).join('')}</div>` : ''}
       ${IMPORT_SECTIONS.map(([key, t]) => { const rs = rows.filter(r => r.key === key); if (!rs.length) return ''; const T = TYPES[t];
@@ -4789,7 +4800,7 @@ function showImportReview(m, res, fname, srcText = '') {
     for (const { target, rels } of created) for (const rl of rels) { const o = all.find(x => norm(x.name) === norm(rl.name)); if (o && o !== target && !(target.relations ||= []).some(x => x.target === o.id)) target.relations.push({ target: o.id, kind: REL_KINDS.includes(rl.kind) ? rl.kind : 'otro', note: rl.note || '' }); }
     bg.querySelectorAll('[data-canon]').forEach(c => { if (!c.checked) return; const f = canon[+c.dataset.canon]; m.canon.push({ id: uid('k_'), entity: f.entity, attribute: f.attribute, value: f.value, since: Number(f.since) || '', note: 'De la biblia importada' }); counts['Fichas canon'] = (counts['Fichas canon'] || 0) + 1; });
     bg.querySelectorAll('[data-capi]').forEach(cb => { if (!cb.checked) return; const x = caps[+cb.dataset.capi]; const num = Number(x.number) || ((chapterList(m).at(-1)?.number || 0) + 1); let ch = chapterByNum(m, num); if (ch) { if (!ch.premise) ch.premise = x.premise || ''; if (!ch.title) ch.title = x.title || ''; } else { ch = newChapter(m, num, x.title || '', x.premise || ''); m.chapters.push(ch); } counts['Capítulos'] = (counts['Capítulos'] || 0) + 1; });
-    const ex = [...bg.querySelectorAll('[data-ext]')].filter(cb => cb.checked).map(cb => extras[+cb.dataset.ext]); if (ex.length) { m.bible.extras = [m.bible.extras, ...ex.map(x => `## ${x.title || 'Apunte'}\n${String(x.text).trim()}`)].filter(Boolean).join('\n\n'); counts['Apuntes'] = ex.length; }
+    const ex = [...bg.querySelectorAll('[data-ext]')].filter(cb => cb.checked).map(cb => extras[+cb.dataset.ext]); if (ex.length) { secs(m); ex.forEach(x => secAdd(m, { title: x.title || 'Notas', text: x.text, icon: x.icon })); counts['Secciones'] = ex.length; }
     if (srcText) { (m.bible.sources ||= []).push({ id: uid('doc_'), name: fname, text: srcText, at: Date.now() }); counts['Documento original'] = 1; }
     if (!Object.keys(counts).length) return toast('No marcaste nada', 'err');
     if (m.sample) m.sampleTouched = true;
@@ -4863,7 +4874,7 @@ async function sectionBlocks(m, t, { images = true } = {}) {
   return out;
 }
 function canonBlocks(m) { const { H, KV } = D(); const out = [H('Fichas canon', 1)]; const by = {}; m.canon.forEach(f => (by[f.entity || '—'] ||= []).push(f)); for (const [ent, fs] of Object.entries(by)) { out.push(H(ent, 3)); out.push(...KV(fs.map(f => [f.attribute || '—', `${f.value}${f.since ? '  (desde Cap ' + f.since + ')' : ''}${f.note ? '  — ' + f.note : ''}`]))); } return out; }
-function bibleBlocks(m) { const { H, KV } = D(); const b = m.bible; return [H('Historia', 1), ...KV([['Género', b.genre], ['Tono', b.tone], ['Sinopsis', b.synopsis], ['Trama completa', b.plot], ['Reglas del mundo', b.rules], ['Otros apuntes', b.extras], ['Protagonista', b.protagonistId ? nameOf(m, b.protagonistId) : '']]), H('Estilo de imágenes', 2), ...KV([['Modelo', b.style.model], ['Pasos', b.style.steps], ['CFG', b.style.cfg], ['Tamaño', `${b.style.width}×${b.style.height}`], ['Prompt de estilo', b.style.prefix], ['Prompt negativo', b.style.negative]])]; }
+function bibleBlocks(m) { const { H, KV, P } = D(); const b = m.bible; const secBlocks = (b.sections || []).flatMap(s => [H(`${s.icon} ${s.title}`, 2), ...String(s.text || '').split('\n').map(t => P(t.replace(/^#+\s*/, '').replace(/^[-•*]\s+/, '• ').replace(/\*\*/g, ''), /^#/.test(t.trim()) ? { run: { bold: true } } : {}))]); return [H('Historia', 1), ...KV([['Género', b.genre], ['Tono', b.tone], ['Sinopsis', b.synopsis], ['Trama completa', b.plot], ['Reglas del mundo', b.rules], ['Protagonista', b.protagonistId ? nameOf(m, b.protagonistId) : '']]), ...(secBlocks.length ? [H('Secciones de mi biblia', 1), ...secBlocks] : []), H('Estilo de imágenes', 2), ...KV([['Modelo', b.style.model], ['Pasos', b.style.steps], ['CFG', b.style.cfg], ['Tamaño', `${b.style.width}×${b.style.height}`], ['Prompt de estilo', b.style.prefix], ['Prompt negativo', b.style.negative]])]; }
 async function chapterBlocks(m, c, { script = true, images = false } = {}) {
   const { H, P, KV, IMG } = D(); const out = [H(`Capítulo ${c.number}${c.title ? ': ' + c.title : ''}`, 1), ...KV([['Estado', c.status], ['Premisa', c.premise], ['Resumen', c.summary]])];
   if (script && c.panels?.length) {
@@ -5318,7 +5329,8 @@ const gxHit = (txt, kw) => { const t = norm(txt || ''); return kw.some(k => t.in
 /* Todo lo editable del manhwa, con su "dirección" */
 function gxFields(m) {
   const F = []; const add = (p, l, v, long = false) => { if (v != null && String(v).trim() !== '') F.push({ p, l, v: String(v), long }); };
-  const b = m.bible; [['synopsis', 'Sinopsis'], ['plot', 'Trama completa'], ['rules', 'Reglas del mundo'], ['genre', 'Género'], ['tone', 'Tono'], ['extras', 'Otros apuntes']].forEach(([k, l]) => add('bible.' + k, 'Biblia · ' + l, b[k], ['plot', 'extras'].includes(k)));
+  const b = m.bible; [['synopsis', 'Sinopsis'], ['plot', 'Trama completa'], ['rules', 'Reglas del mundo'], ['genre', 'Género'], ['tone', 'Tono']].forEach(([k, l]) => add('bible.' + k, 'Biblia · ' + l, b[k], k === 'plot'));
+  for (const s of b.sections || []) { add(`sec.${s.id}.title`, `${s.icon} Sección · nombre`, s.title); add(`sec.${s.id}.text`, `${s.icon} ${s.title}`, s.text, s.text.length > 1500); }
   for (const t of Object.keys(TYPES)) { const T = TYPES[t]; for (const e of m[T.key] || []) for (const [k, l] of T.fields) if (!['loraId', 'loraWeight'].includes(k)) add(`ent.${e.id}.${k}`, `${T.icon} ${e.name} · ${l}`, e[k]); }
   for (const f of m.canon || []) { add(`canon.${f.id}.entity`, `📌 Ficha canon · quién`, f.entity); add(`canon.${f.id}.attribute`, `📌 ${f.entity} · atributo`, f.attribute); add(`canon.${f.id}.value`, `📌 ${f.entity} · ${f.attribute}`, f.value); add(`canon.${f.id}.note`, `📌 ${f.entity} · nota`, f.note); }
   for (const c of chapterList(m)) {
@@ -5338,6 +5350,7 @@ function gxGet(m, path) { return gxFields(m).find(f => f.p === path)?.v ?? ''; }
 function gxSet(m, path, val) {
   const [kind, a, b, c] = path.split('.');
   if (kind === 'bible') { m.bible[a] = val; return true; }
+  if (kind === 'sec') { const s = (m.bible.sections || []).find(x => x.id === a); if (!s) return false; s[b] = val; return true; }
   if (kind === 'ent') { const e = findEntity(m, a); if (!e) return false; const T = TYPES[findEntityType(m, a)]; const ty = T.fields.find(f => f[0] === b)?.[2]; e[b] = ty === 'num' ? (Number(val) || 0) : val; return true; }
   if (kind === 'canon') { const f = m.canon.find(x => x.id === a); if (!f) return false; f[b] = val; return true; }
   const ch = chapterById(m, a); if (!ch) return false;
@@ -5449,6 +5462,80 @@ function gxHTML(m) {
 ACT.srcView = el => { const d = cur().bible.sources.find(x => x.id === el.dataset.id); const bg = modal(`<h2>📄 ${esc(d.name)}</h2><div style="white-space:pre-wrap;max-height:65vh;overflow:auto;font-family:Georgia,serif;line-height:1.6">${esc(d.text)}</div><div class="acts"><button class="pri" data-x="ok">Cerrar</button></div>`, { wide: true }); bg.querySelector('[data-x=ok]').onclick = () => bg.remove(); };
 ACT.srcDl = el => { const d = cur().bible.sources.find(x => x.id === el.dataset.id); downloadBlob(new Blob([d.text], { type: 'text/plain;charset=utf-8' }), fileSafe(d.name.replace(/\.[a-z0-9]+$/i, '')) + ' (original).txt'); };
 ACT.srcDel = async el => { const m = cur(); if (!await confirmBox('¿Borrar este documento original? (lo que ya se acomodó en tu Biblia no se borra)', { ok: 'Borrar' })) return; m.bible.sources = m.bible.sources.filter(x => x.id !== el.dataset.id); touch(m); render(); };
+
+/* =====================================================================
+   📚 SECCIONES DE MI BIBLIA + "TODO LO QUE TENGO"
+   Todo lo que no es personaje/lugar/poder/etc. vive en secciones con
+   nombre e ícono propios (Temas, Arcos, Glosario, Estilo de dibujo…),
+   bien presentadas. Arriba se ve un resumen claro de todo el manhwa.
+   ===================================================================== */
+function secs(m) {
+  const b = m.bible; b.sections ||= [];
+  if (b.extras && String(b.extras).trim()) { // pasar los apuntes viejos a secciones
+    const parts = String(b.extras).split(/^##\s+/m).map(x => x.trim()).filter(Boolean);
+    for (const p of parts) { const nl = p.indexOf('\n'); const title = (nl > 0 ? p.slice(0, nl) : 'Apuntes').trim(); const text = (nl > 0 ? p.slice(nl + 1) : p).trim(); secAdd(m, { title, text }); }
+    b.extras = ''; touch(m);
+  }
+  return b.sections;
+}
+const SEC_ICONS = [['tema', '🎭'], ['arco', '🌀'], ['glos', '📖'], ['termin', '📖'], ['estilo', '🎨'], ['dibujo', '🎨'], ['arte', '🎨'], ['música', '🎵'], ['musica', '🎵'], ['cap', '📑'], ['trama', '🧵'], ['final', '🏁'], ['mundo', '🌍'], ['geograf', '🗺️'], ['magia', '✨'], ['sistema', '⚙️'], ['religi', '⛪'], ['polít', '👑'], ['polit', '👑'], ['idea', '💡'], ['nota', '📝'], ['referen', '🔗'], ['inspira', '🌟'], ['romance', '💞'], ['secreto', '🤫'], ['misterio', '🕵️'], ['econom', '💰'], ['criatura', '🐉'], ['monstru', '🐉'], ['raza', '🧬'], ['especie', '🧬'], ['idioma', '🗣️'], ['lengua', '🗣️'], ['cultura', '🏮'], ['tecnolog', '🔧'], ['guerra', '⚔️'], ['batalla', '⚔️']];
+const secIcon = t => (SEC_ICONS.find(([k]) => norm(t).includes(norm(k))) || [, '📘'])[1];
+function secAdd(m, { title, text, icon }) {
+  const arr = (m.bible.sections ||= []); title = String(title || 'Sección').trim(); text = String(text || '').trim();
+  const same = arr.find(s => norm(s.title) === norm(title));
+  if (same) { if (text && !same.text.includes(text)) same.text = same.text ? same.text + '\n\n' + text : text; return same; }
+  const s = { id: uid('sec_'), title, icon: icon || secIcon(title), text, at: Date.now() }; arr.push(s); return s;
+}
+/* texto bonito: títulos, listas, negritas y párrafos */
+function prettyText(t) {
+  const lines = esc(String(t || '')).split('\n'); let out = '', list = false;
+  const inl = s => s.replace(/\*\*(.+?)\*\*/g, '<b>$1</b>').replace(/(^|\s)\*(\S.+?)\*(?=\s|$)/g, '$1<i>$2</i>');
+  for (const raw of lines) {
+    const l = raw.trim();
+    if (/^[-•*]\s+/.test(l)) { if (!list) { out += '<ul>'; list = true; } out += `<li>${inl(l.replace(/^[-•*]\s+/, ''))}</li>`; continue; }
+    if (list) { out += '</ul>'; list = false; }
+    if (!l) { out += '<div style="height:8px"></div>'; continue; }
+    if (/^#{1,4}\s+/.test(l)) { out += `<h4>${inl(l.replace(/^#+\s+/, ''))}</h4>`; continue; }
+    if (/^[^:]{2,40}:\s/.test(l)) { const i = l.indexOf(':'); out += `<p><b>${inl(l.slice(0, i))}:</b>${inl(l.slice(i + 1))}</p>`; continue; }
+    out += `<p>${inl(l)}</p>`;
+  }
+  if (list) out += '</ul>'; return out;
+}
+/* ---------- resumen: todo lo que tengo ---------- */
+function haveHTML(m) {
+  const b = m.bible; const S2 = secs(m);
+  const tile = (icon, label, n, to, sub = '') => `<a class="havetile ${n ? '' : 'empty'}" ${to ? (to[0] === '#' && !to.startsWith('#/') ? `data-a="secScroll" data-id="${to.slice(1)}"` : `data-a="go" data-to="${to}"`) : ''}><div style="font-size:24px">${icon}</div><div class="grow"><div class="small" style="font-weight:700">${esc(label)}</div><div class="tiny ${n ? '' : 'dim'}">${sub || (n ? (typeof n === 'number' ? n + ' guardados' : '✔ escrito') : 'vacío')}</div></div></a>`;
+  const hist = [b.synopsis, b.plot, b.rules].filter(x => (x || '').trim()).length;
+  const words = [b.synopsis, b.plot, b.rules, ...S2.map(s => s.text), ...Object.keys(TYPES).flatMap(k => (m[TYPES[k].key] || []).map(e => Object.values(e).filter(v => typeof v === 'string').join(' ')))].join(' ').split(/\s+/).filter(Boolean).length;
+  return `<div class="panelbox" style="margin-bottom:16px">
+    <div class="row between"><h2 style="margin:0">📚 Todo lo que tengo de ${esc(m.name)}</h2><span class="small muted">${words.toLocaleString('es')} palabras guardadas · ${S.user ? '☁️ guardado en tu nube' : '💾 guardado en este aparato'}</span></div>
+    <div class="havegrid" style="margin-top:10px">
+      ${tile('🧠', 'Historia (sinopsis, trama, reglas)', hist ? hist + ' de 3' : 0, '#sec-historia', hist ? `${hist} de 3 escritas` : '')}
+      ${Object.entries(TYPES).map(([t, T]) => tile(T.icon, T.label, (m[T.key] || []).length, mlink(m, 'wiki', t))).join('')}
+      ${tile('📌', 'Fichas canon', m.canon.length, mlink(m, 'canon'))}
+      ${tile('📖', 'Capítulos', chapterList(m).length, mlink(m, 'caps'))}
+      ${S2.map(s => tile(s.icon, s.title, 1, '#' + s.id, `${s.text.split(/\s+/).filter(Boolean).length} palabras`)).join('')}
+      ${(b.sources || []).length ? tile('📄', 'Documento original', b.sources.length, '#sec-docs', `${b.sources.length} guardado${b.sources.length > 1 ? 's' : ''} completo${b.sources.length > 1 ? 's' : ''}`) : ''}
+    </div>
+  </div>`;
+}
+/* ---------- secciones bonitas ---------- */
+function sectionsHTML(m) {
+  const S2 = secs(m); const ed = window.__secEdit;
+  return `<div class="row between" style="margin:18px 0 8px"><h2 style="margin:0">📘 Secciones de mi biblia</h2><button data-a="secNew">＋ Nueva sección</button></div>
+    ${S2.length ? '' : '<p class="muted small">Aquí aparecen los temas de tu biblia que no son personajes, lugares ni poderes: temas, arcos, glosario, estilo de dibujo, etc. Se crean solos al subir tu biblia, o agrégalos tú.</p>'}
+    <div class="secgrid">${S2.map(s => `<div class="panelbox secbox" id="${s.id}">
+      <div class="row nw between"><h3 style="margin:0">${s.icon} ${esc(s.title)}</h3><span class="row nw">${ed === s.id ? `<button class="sm ok" data-a="secSave" data-id="${s.id}">✔ Listo</button>` : `<button class="sm" data-a="secEdit" data-id="${s.id}">✏️</button>`}<button class="sm icon danger" data-a="secDel" data-id="${s.id}">🗑️</button></span></div>
+      ${ed === s.id ? `<div class="grid2" style="grid-template-columns:90px 1fr"><label class="f">Ícono<input id="secIc" value="${esc(s.icon)}"></label><label class="f">Nombre<input id="secTi" value="${esc(s.title)}"></label></div><label class="f">Contenido<textarea id="secTx" style="min-height:240px">${esc(s.text)}</textarea></label><p class="tiny dim">Tip: “- ” hace listas, “# ” hace títulos, **así** pone negritas.</p>`
+      : `<div class="sectext">${prettyText(s.text) || '<span class="muted">Vacía</span>'}</div>`}
+    </div>`).join('')}</div>`;
+}
+ACT.secEdit = el => { window.__secEdit = el.dataset.id; render(); setTimeout(() => $('#secTx')?.focus(), 50); };
+ACT.secSave = el => { const m = cur(); const s = secs(m).find(x => x.id === el.dataset.id); s.icon = ($('#secIc').value || '📘').trim(); s.title = ($('#secTi').value || 'Sección').trim(); s.text = $('#secTx').value; window.__secEdit = null; touch(m); render(); toast('Sección guardada ✔', 'ok'); };
+ACT.secNew = async () => { const m = cur(); const t = await promptBox('＋ Nueva sección', '', { label: 'Nombre (ej. Temas, Arcos, Glosario, Estilo de dibujo)' }); if (!t) return; const s = secAdd(m, { title: t, text: '' }); window.__secEdit = s.id; touch(m); render(); };
+ACT.secDel = async el => { const m = cur(); const s = secs(m).find(x => x.id === el.dataset.id); if (!await confirmBox(`¿Borrar la sección “${s.title}”?`, { ok: 'Borrar' })) return; m.bible.sections = m.bible.sections.filter(x => x.id !== s.id); touch(m); render(); };
+
+ACT.secScroll = el => { const t = document.getElementById(el.dataset.id); if (t) { t.scrollIntoView({ behavior: 'smooth', block: 'start' }); t.classList.add('flash'); setTimeout(() => t.classList.remove('flash'), 1400); } };
 
 </script>
 </body>

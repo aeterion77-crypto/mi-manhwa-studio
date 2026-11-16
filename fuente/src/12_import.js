@@ -41,9 +41,9 @@ Devuelve SOLO este JSON:
  "timeline": [{${f('historia')}}],
  "canon": [{"entity":"quién o qué","attribute":"atributo corto (cicatriz, color de ojos, edad, estado…)","value":"valor","since":número de capítulo o null}],
  "chapters": [{"number":número,"title":"","premise":"qué pasa en ese capítulo, completo"}],
- "extras": [{"title":"de qué trata","text":"el texto COPIADO tal cual del documento"}]
+ "sections": [{"title":"nombre corto de la sección (Temas, Arcos, Glosario, Estilo de dibujo, Música, Notas…)","icon":"un emoji","text":"todo el contenido de esa sección, COMPLETO y fiel al documento; ordénalo con '- ' para listas y '# ' para subtítulos si ayuda"}]
 }
-MUY IMPORTANTE: NADA del documento debe quedar fuera. Si el autor tiene un plan o resumen de capítulos, ponlo en "chapters". Todo lo que no quepa en otra sección (temas, arcos, glosario, notas, ideas sueltas, referencias, estilo de dibujo, cualquier otra cosa) va en "extras", copiado tal cual.
+MUY IMPORTANTE: NADA del documento debe quedar fuera. Si el autor tiene un plan o resumen de capítulos, ponlo en "chapters". Todo lo que no quepa en otra parte va en "sections": agrúpalo por tema, una sección por tema, con un nombre claro (ej. "Temas de la historia", "Arcos", "Glosario", "Estilo de dibujo", "Plan del final"), sin resumir ni perder nada.
 En "canon" pon solo hechos físicos o fijos importantes que no deben cambiar (marcas, colores, edades, quién murió y en qué capítulo, etc.).
 
 DOCUMENTO:
@@ -51,7 +51,7 @@ ${text}`;
 }
 function splitDoc(text, max) { if (text.length <= max) return [text]; const out = []; let i = 0; while (i < text.length) { let e = Math.min(text.length, i + max); if (e < text.length) { const p = text.lastIndexOf('\n\n', e); if (p > i + max * 0.5) e = p; } out.push(text.slice(i, e)); i = e; } return out; }
 function mergeImport(a, b) {
-  const out = { bible: { ...a.bible }, canon: [...(a.canon || []), ...(b.canon || [])], extras: [...(a.extras || []), ...(b.extras || [])], chapters: [...(a.chapters || [])] };
+  const out = { bible: { ...a.bible }, canon: [...(a.canon || []), ...(b.canon || [])], sections: [...(a.sections || []), ...(a.extras || []), ...(b.sections || []), ...(b.extras || [])], chapters: [...(a.chapters || [])] };
   for (const c of b.chapters || []) { const same = out.chapters.find(x => Number(x.number) === Number(c.number) && c.number != null); if (same) { if (c.premise) same.premise = same.premise ? same.premise + '\n' + c.premise : c.premise; same.title ||= c.title; } else out.chapters.push(c); }
   for (const [k, v] of Object.entries(b.bible || {})) if (v) out.bible[k] = out.bible[k] && out.bible[k] !== v ? out.bible[k] + '\n\n' + v : v;
   for (const key of ['characters', 'places', 'powers', 'objects', 'factions', 'timeline']) {
@@ -107,7 +107,7 @@ async function runImport(m, text, fname, status, btn, bg) {
       res = mergeImport(res, r);
     }
     clearInterval(timer);
-    const n = ['characters', 'places', 'powers', 'objects', 'factions', 'timeline', 'canon', 'chapters', 'extras'].reduce((a, k) => a + (res[k] || []).length, 0);
+    const n = ['characters', 'places', 'powers', 'objects', 'factions', 'timeline', 'canon', 'chapters', 'sections'].reduce((a, k) => a + (res[k] || []).length, 0);
     if (!n && !Object.values(res.bible || {}).some(Boolean)) { status('⚠️ Claude no encontró nada que acomodar. Revisa que el texto sea tu biblia e intenta de nuevo.', 'bad'); return; }
     bg.close(); showImportReview(m, res, fname, text);
   } catch (e) {
@@ -117,7 +117,7 @@ async function runImport(m, text, fname, status, btn, bg) {
 }
 const IMPORT_SECTIONS = [['characters', 'personajes'], ['places', 'lugares'], ['powers', 'poderes'], ['objects', 'objetos'], ['factions', 'facciones'], ['timeline', 'historia']];
 function showImportReview(m, res, fname, srcText = '') {
-  const extras = (res.extras || []).filter(x => x && (x.text || '').trim()); const caps = (res.chapters || []).filter(x => x && (x.premise || x.title));
+  const extras = [...(res.sections || []), ...(res.extras || [])].filter(x => x && (x.text || '').trim()); const caps = (res.chapters || []).filter(x => x && (x.premise || x.title));
   const rows = []; // {sec, t, e, dupe, mode}
   for (const [key, t] of IMPORT_SECTIONS) for (const e of res[key] || []) { if (!e?.name) continue; const dupe = (m[TYPES[t].key] || []).find(x => norm(x.name) === norm(e.name)); rows.push({ key, t, e, dupe, mode: dupe ? 'merge' : 'new' }); }
   const canon = (res.canon || []).filter(f => f.entity && f.attribute && f.value).map(f => ({ ...f, dupe: m.canon.some(c => norm(c.entity) === norm(f.entity) && norm(c.attribute) === norm(f.attribute)) }));
@@ -128,7 +128,7 @@ function showImportReview(m, res, fname, srcText = '') {
     <p class="small muted">Nada se guarda hasta que tú lo apruebes. Desmarca lo que no quieras. Si algo ya existe, elige si completarlo, reemplazarlo u omitirlo.</p>
     <div class="col" style="gap:10px;max-height:56vh;overflow:auto">
       ${caps.length ? `<div class="panelbox"><h3>📖 Plan de capítulos (${caps.length})</h3>${caps.map((c, i) => `<label class="row nw small"><input type="checkbox" data-capi="${i}" checked><span><b>Cap ${esc(c.number ?? '?')}${c.title ? ' · ' + esc(c.title) : ''}</b> <span class="muted">${esc(String(c.premise || '').slice(0, 140))}</span>${chapterByNum(m, c.number) ? ' <span class="chip warn">ya existe → completo lo vacío</span>' : ''}</span></label>`).join('')}</div>` : ''}
-      ${extras.length ? `<div class="panelbox"><h3>🗂️ Otros apuntes (${extras.length})</h3><p class="tiny dim">Lo que no cabe en otra sección. Se guarda en “Otros apuntes” de tu Biblia y Claude lo usa.</p>${extras.map((x, i) => `<label class="row nw small"><input type="checkbox" data-ext="${i}" checked><span><b>${esc(x.title || 'Apunte')}</b> <span class="muted">${esc(String(x.text).slice(0, 140))}</span></span></label>`).join('')}</div>` : ''}
+      ${extras.length ? `<div class="panelbox"><h3>📘 Secciones de tu biblia (${extras.length})</h3><p class="tiny dim">Temas, arcos, glosario, estilo… cada uno queda como su propia sección en tu Biblia, y Claude lo usa.</p>${extras.map((x, i) => `<label class="row nw small"><input type="checkbox" data-ext="${i}" checked><span><b>${esc(x.icon || secIcon(x.title || ''))} ${esc(x.title || 'Sección')}</b> <span class="muted">${esc(String(x.text).slice(0, 140))}</span></span></label>`).join('')}</div>` : ''}
       ${srcText ? `<div class="alert ok small"><div>📄 Tu documento original completo (${srcText.length.toLocaleString('es')} caracteres) también se guarda tal cual en tu Biblia, para que nada se pierda.</div></div>` : ''}
       ${bibleF.length ? `<div class="panelbox"><h3>🧠 Biblia</h3>${bibleF.map(([k, l]) => `<label class="row nw small"><input type="checkbox" data-bib="${k}" checked><div class="grow"><b>${l}</b>${m.bible[k] ? ' <span class="chip warn">ya tienes texto: se agrega al final</span>' : ''}<div class="muted">${esc(String(res.bible[k]).slice(0, 220))}${String(res.bible[k]).length > 220 ? '…' : ''}</div></div></label>`).join('')}</div>` : ''}
       ${IMPORT_SECTIONS.map(([key, t]) => { const rs = rows.filter(r => r.key === key); if (!rs.length) return ''; const T = TYPES[t];
@@ -157,7 +157,7 @@ function showImportReview(m, res, fname, srcText = '') {
     for (const { target, rels } of created) for (const rl of rels) { const o = all.find(x => norm(x.name) === norm(rl.name)); if (o && o !== target && !(target.relations ||= []).some(x => x.target === o.id)) target.relations.push({ target: o.id, kind: REL_KINDS.includes(rl.kind) ? rl.kind : 'otro', note: rl.note || '' }); }
     bg.querySelectorAll('[data-canon]').forEach(c => { if (!c.checked) return; const f = canon[+c.dataset.canon]; m.canon.push({ id: uid('k_'), entity: f.entity, attribute: f.attribute, value: f.value, since: Number(f.since) || '', note: 'De la biblia importada' }); counts['Fichas canon'] = (counts['Fichas canon'] || 0) + 1; });
     bg.querySelectorAll('[data-capi]').forEach(cb => { if (!cb.checked) return; const x = caps[+cb.dataset.capi]; const num = Number(x.number) || ((chapterList(m).at(-1)?.number || 0) + 1); let ch = chapterByNum(m, num); if (ch) { if (!ch.premise) ch.premise = x.premise || ''; if (!ch.title) ch.title = x.title || ''; } else { ch = newChapter(m, num, x.title || '', x.premise || ''); m.chapters.push(ch); } counts['Capítulos'] = (counts['Capítulos'] || 0) + 1; });
-    const ex = [...bg.querySelectorAll('[data-ext]')].filter(cb => cb.checked).map(cb => extras[+cb.dataset.ext]); if (ex.length) { m.bible.extras = [m.bible.extras, ...ex.map(x => `## ${x.title || 'Apunte'}\n${String(x.text).trim()}`)].filter(Boolean).join('\n\n'); counts['Apuntes'] = ex.length; }
+    const ex = [...bg.querySelectorAll('[data-ext]')].filter(cb => cb.checked).map(cb => extras[+cb.dataset.ext]); if (ex.length) { secs(m); ex.forEach(x => secAdd(m, { title: x.title || 'Notas', text: x.text, icon: x.icon })); counts['Secciones'] = ex.length; }
     if (srcText) { (m.bible.sources ||= []).push({ id: uid('doc_'), name: fname, text: srcText, at: Date.now() }); counts['Documento original'] = 1; }
     if (!Object.keys(counts).length) return toast('No marcaste nada', 'err');
     if (m.sample) m.sampleTouched = true;
