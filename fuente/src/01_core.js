@@ -372,6 +372,7 @@ function render() {
   renderSide();
   hydrateImages($('#view'));
   if (typeof wkMount === 'function') wkMount();
+  if (typeof coWriteMount === 'function') coWriteMount();
   const after = AFTER[Route.view]; if (after) try { after(); } catch (e) { console.error(e); }
   window.scrollTo({ top: 0 });
 }

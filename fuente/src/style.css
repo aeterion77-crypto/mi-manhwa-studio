@@ -292,3 +292,7 @@ input[type=radio],input[type=checkbox]{width:20px;min-height:20px;height:20px;fl
 .clip.on .eh{background:rgba(255,214,10,.55)}
 .playhead{position:absolute;top:0;bottom:0;width:2px;background:#ff4d4d;pointer-events:none;z-index:5}
 .playhead i{position:absolute;top:0;left:-6px;width:14px;height:12px;background:#ff4d4d;clip-path:polygon(0 0,100% 0,50% 100%)}
+
+.sttxt{width:100%;min-height:380px;font-family:Georgia,'Times New Roman',serif;font-size:17px;line-height:1.7;padding:16px;resize:vertical}
+.sttxt::selection{background:rgba(180,77,255,.45)}
+.wktip{display:flex;gap:10px;align-items:center;background:rgba(180,77,255,.07);border:1px dashed rgba(180,77,255,.45);border-radius:12px;padding:8px 12px;margin:8px 0 12px}

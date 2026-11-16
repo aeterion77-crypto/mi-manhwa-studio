@@ -80,7 +80,7 @@ VIEWS.cap = () => {
         <div class="grid2"><label class="f">Director de paneles<select ${bindAttr(c, 'tone')}>${[['auto', 'Automático'], ['pelea', 'Pelea (chico, chico, ¡GRANDE!)'], ['drama', 'Drama (grandes y lentos)'], ['romance', 'Romance'], ['misterio', 'Misterio / terror'], ['comedia', 'Comedia']].map(([v, l]) => `<option value="${v}" ${c.tone === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
         <label class="f">Paneles<input id="npan" type="number" min="5" max="60" value="${c.panelTarget || 30}"></label></div>
         <div class="row"><button class="pri big" data-a="writeScript">✨ Escribir guion (${c.panelTarget || 30} paneles)</button><button data-a="pasteScript">📋 Ya lo tengo: pegar mi guion</button>${c.panels.length ? '<button data-a="applyDirector">🎬 Aplicar director</button>' : ''}</div>
-        <p class="tiny dim">Usa el cerebro completo: personajes, LoRAs, trigger words, fichas canon y capítulos anteriores.</p>
+        <p class="tiny dim">Usa el cerebro completo: personajes, LoRAs, trigger words, fichas canon y capítulos anteriores.${c.story?.text?.trim() ? ' <b>Además usa lo que escribiste en “✍️ Escribir con Claude”.</b>' : ''}</p>
       </div>
       <div class="col">
         <div class="panelbox"><h2>🛡️ Continuidad</h2>
@@ -89,13 +89,15 @@ VIEWS.cap = () => {
           <div class="row"><button data-a="checkCont">🔍 Revisar continuidad</button><button class="ok" data-a="finishCap">✅ Terminar capítulo</button></div>
           <p class="tiny dim">“Terminar capítulo” detecta nuevos hechos y te los propone. Tú das CONSERVAR.</p>
         </div>
-        <div class="panelbox"><h2>🎨 Imágenes</h2>
+        <div class="panelbox"><h2>🎨 Imágenes</h2>${typeof wkTip === 'function' ? wkTip('obrero', `dibuja los paneles de este capítulo con la cara de tu prota · ${mx(0.012)} por panel en 1K (este capítulo: ${mx(0.012 * c.panels.length)}).`) : ''}
           <div class="row"><button class="pri" data-a="genChapter" ${c.panels.length ? '' : 'disabled'}>⚡ GENERAR EN FAL.AI${genN ? ` (${genN} aprobados)` : ''}</button><button data-a="toBuilder">🧩 Enviar al armador</button><button data-a="translateCap">🌐 Traducir EN + KO</button></div>
           <div id="genProg"></div>
         </div>
         ${c.summary ? `<div class="panelbox"><h3>Resumen</h3><p class="small">${esc(c.summary)}</p></div>` : ''}
       </div>
     </div>
+
+    ${typeof coWriteHTML === 'function' ? coWriteHTML(m, c) : ''}
 
     <div class="row between" style="margin:22px 0 10px"><div><h2>🎞️ Guion · ${c.panels.length} paneles</h2><div class="small muted">✔ ${c.panels.filter(p => p.approved).length} aprobados para Fal.ai · solo los aprobados se generan</div></div>
       <div class="row"><button data-a="pasteScript">📋 Pegar mi guion</button><button data-a="addPanel" data-i="${c.panels.length}">＋ Añadir panel</button>${c.panels.length ? `<button class="ok" data-a="approveAll">✔ Aprobar todos</button>` : ''}</div></div>
@@ -163,12 +165,14 @@ ACT.applyDirector = () => { const m = cur(); const c = chapterById(m, Route.a); 
 ACT.writeScript = async el => {
   const m = cur(); const c = chapterById(m, Route.a);
   const n = Math.min(60, Math.max(5, Number($('#npan').value) || 30)); c.panelTarget = n;
-  if (!c.premise.trim()) return toast('Describe primero qué pasa en el capítulo', 'err');
+  const stTxt = (c.story?.text || '').trim();
+  if (!c.premise.trim() && !stTxt) return toast('Describe primero qué pasa en el capítulo (o escríbelo en “✍️ Escribir con Claude”)', 'err');
   if (c.panels.length && !await confirmBox(`Este capítulo ya tiene ${c.panels.length} paneles. ¿Reemplazarlos con un guion nuevo? (las imágenes quedan en la Galería)`, { ok: 'Reemplazar', title: 'Reescribir guion' })) return;
   const chars = m.characters.map(x => `${x.name}${x.trigger ? ' [trigger: ' + x.trigger + ']' : ''}: ${x.appearance || ''}`).join('\n');
   const director = { pelea: 'PELEA: paneles pequeños (S), pequeños (S) y GRANDE (L o XL) para cada golpe o impacto. Mucho SFX.', drama: 'DRAMA: paneles grandes (L/XL) y lentos, silencios, primeros planos de emociones.', romance: 'ROMANCE: paneles grandes, miradas, detalles de manos y ojos.', misterio: 'MISTERIO: paneles medianos con un XL de revelación, sombras.', comedia: 'COMEDIA: paneles pequeños y rápidos, reacciones exageradas.', auto: 'Elige el ritmo según la escena: pelea = S,S,L; drama = L lentos.' }[c.tone || 'auto'];
   const prompt = `Eres guionista profesional de manhwa/webtoon vertical. Escribe el guion del Cap ${c.number}${c.title ? ' "' + c.title + '"' : ''}.
-PETICIÓN DEL AUTOR: ${c.premise}
+PETICIÓN DEL AUTOR: ${c.premise || 'Adapta la historia escrita.'}
+${stTxt ? `\nHISTORIA YA ESCRITA DEL CAPÍTULO (adáptala FIELMENTE a paneles: mismos hechos, mismo orden; usa sus diálogos, recortándolos para globos):\n<<<\n${stTxt.slice(0, 30000)}\n>>>\n` : ''}
 
 CEREBRO DEL MANHWA (respeta TODO, especialmente fichas canon, estados y personalidades):
 ${brain(m, { skipChapterId: c.id, maxChars: 40000 })}

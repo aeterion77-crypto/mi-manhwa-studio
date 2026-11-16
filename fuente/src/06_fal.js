@@ -109,7 +109,7 @@ VIEWS.lora = () => {
     <div class="row"><button data-a="go" data-to="${mlink(m, 'lora')}">← Personajes</button><button data-a="go" data-to="${mlink(m, 'wiki', 'personajes', ch.id)}">Ver ficha</button>${ch.loraId ? `<button class="pri" data-a="dlLora" data-id="${ch.id}">⬇ Descargar LoRA</button>` : ''}<button data-a="dlCharImgs" data-id="${ch.id}">⬇ Imágenes</button></div></div>
     ${!S.user ? '<div class="alert warn" style="margin-bottom:14px">Inicia sesión y guarda tu API key de Fal.ai en Configuración para generar.</div>' : ''}
 
-    <div class="sect panelbox"><h2>1 · Describe a tu personaje como quieras</h2>
+    <div class="sect panelbox"><h2>1 · Describe a tu personaje como quieras</h2>${typeof wkTip === 'function' ? wkTip('artista', `crea la cara de tu personaje bonita · ${mx(0.048)} por imagen. Para probar ideas usa a ✏️ El de Pruebas (${mx(0.009)}).`) : ''}
       <textarea ${bindAttr(lab, 'desc')} placeholder="Quiero mi prota con pelo negro, lunar pequeño bajo el ojo derecho, ojos grises, chaqueta negra…">${esc(lab.desc)}</textarea>
       ${wkOn() ? `<div class="row small" style="margin:6px 0">¿Quién dibuja? <select id="labWho">${[['artista', '🎨 El Artista Caro (bonito, para crear la cara)'], ['pruebas', '✏️ El de Pruebas (garabatos casi gratis)'], ...(loraKind(ch) === 'klein' ? [['obrero', '👷 El Obrero (ya sabe su cara)']] : [])].map(([v, l]) => `<option value="${v}" ${(S.settings.labWho || (loraKind(ch) === 'klein' ? 'obrero' : 'artista')) === v ? 'selected' : ''}>${l} · ${mx(wkCost(v, 1))} c/u</option>`).join('')}</select></div>` : ''}
       <div class="row"><button class="pri big" data-a="labStart">⚡ Generar 4 pruebas</button>${wkOn() ? `<button data-a="labTwenty">🎨 20 fotos para El Maestro (${mx(wkCost('artista', 20))})</button>` : ''}${lab.rounds.length ? `<span class="small muted">${plural(lab.rounds.length, 'ronda', 'rondas')}</span>` : ''}</div>
@@ -119,11 +119,11 @@ VIEWS.lora = () => {
       <div class="row"><button class="pri" data-a="labFix">🔁 Corregir y generar 4 nuevas</button><button class="ok big" data-a="labSave" ${lab.chosen ? '' : 'disabled'}>💾 GUARDAR ESTE LORA</button></div>
       <p class="tiny dim">Guardar fija el prompt, la semilla y la configuración de la imagen elegida en la ficha del personaje; se usa en todos sus paneles.</p></div>` : ''}
 
-    <div class="sect panelbox"><div class="row between"><h2>3 · Hoja de modelo</h2><button data-a="sheetAll" ${ch.visualPrompt ? '' : 'disabled'}>⚡ Generar hoja completa (${SHEET_SLOTS.length})</button></div>
+    <div class="sect panelbox"><div class="row between"><h2>3 · Hoja de modelo</h2><button data-a="sheetAll" ${ch.visualPrompt ? '' : 'disabled'}>⚡ Generar hoja completa (${SHEET_SLOTS.length})</button></div>${typeof wkTip === 'function' ? wkTip(loraKind(ch) === 'klein' ? 'obrero' : 'artista', loraKind(ch) === 'klein' ? `dibuja las 11 vistas y expresiones · ${mx(0.012 * 11)} todas.` : `dibuja las 11 vistas y expresiones · ${mx(0.048 * 11)} todas.`) : ''}
       <p class="small muted">Frente, perfil, espalda y 8 expresiones. Toca un espacio para generarlo o subir tu propia imagen.</p>
       <div class="sheet">${SHEET_SLOTS.map(([k, l]) => `<div class="slot" ${ch.sheet?.[k] ? `data-img="${ch.sheet[k]}"` : ''} data-a="sheetSlot" data-k="${k}"><span>${l}</span></div>`).join('')}</div></div>
 
-    <div class="sect panelbox"><h2>4 · ENTRENAR MI LORA V2 EN FAL.AI</h2>
+    <div class="sect panelbox"><h2>4 · ENTRENAR MI LORA V2 EN FAL.AI</h2>${typeof wkTip === 'function' ? wkTip('maestro', `se aprende la cara de tu personaje con unas 20 fotos · ${mx(4.30)} una sola vez y es tuyo para siempre.`) : ''}
       <p class="small muted">Sube 20-30 imágenes corregidas del personaje (variedad de ángulos, luz y ropa). Las mando a entrenar y actualizo el LoRA ID solo cuando termine.</p>
       <div class="grid2"><label class="f">Trigger word<input ${bindAttr(ch, 'trigger')} value="${esc(ch.trigger || '')}" placeholder="ej. kaelmh"></label><label class="f">Pasos de entrenamiento<input type="number" id="trSteps" value="${S.settings.trainSteps || 1000}"></label></div>
       ${wkOn() ? `<label class="f">¿Qué maestro le enseña?<select id="trWho"><option value="maestro" ${(S.settings.trWho || 'maestro') === 'maestro' ? 'selected' : ''}>🧑‍🏫 EL MAESTRO · ${mx(4.30)} una vez · luego El Obrero dibuja a ${mx(0.012)} el panel (recomendado)</option><option value="maestroClasico" ${S.settings.trWho === 'maestroClasico' ? 'selected' : ''}>🧑‍🏫 EL MAESTRO CLÁSICO · ${mx(2)} una vez · luego cada panel cuesta ${mx(0.035)}</option></select></label>` : ''}
@@ -132,7 +132,7 @@ VIEWS.lora = () => {
       <div class="grid2"><label class="f">LoRA ID / URL actual<input ${bindAttr(ch, 'loraId')} value="${esc(ch.loraId || '')}"></label><label class="f">Peso LoRA<input type="number" step="0.05" ${bindAttr(ch, 'loraWeight', { num: 1 })} value="${ch.loraWeight ?? 0.9}"></label></div>
     </div>
 
-    <div class="sect panelbox"><h2>5 · ACTUALIZAR PERSONAJE</h2>
+    <div class="sect panelbox"><h2>5 · ACTUALIZAR PERSONAJE</h2>${typeof wkTip === 'function' ? wkTip(loraKind(ch) === 'klein' ? 'obrero' : 'artista', loraKind(ch) === 'klein' ? `redibuja a tu personaje con su cambio · ${mx(0.012)} por imagen.` : `redibuja a tu personaje con su cambio · ${mx(0.048)} por imagen (cuando El Maestro le enseñe, lo hará El Obrero, más barato).`) : ''}
       <p class="small muted">¿Cambió algo? (quitar el lunar, nuevo corte de pelo, cicatriz nueva…). Genero pruebas, eliges y actualizo la ficha.</p>
       <textarea ${bindAttr(upd, 'change')} placeholder="Quitar el lunar y ponerle una cicatriz en la mejilla izquierda">${esc(upd.change)}</textarea>
       <div class="row"><button class="pri" data-a="updGen" ${ch.visualPrompt || ch.appearance ? '' : 'disabled'}>⚡ Generar pruebas</button>${upd.chosen ? '<button class="ok" data-a="updApply">✔ ACTUALIZAR PERSONAJE</button>' : ''}</div>
