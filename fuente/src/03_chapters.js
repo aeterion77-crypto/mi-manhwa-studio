@@ -72,6 +72,7 @@ VIEWS.cap = () => {
   const genN = (c.panels || []).filter(p => p.approved && !p.imageId).length;
   return `<div class="head"><div><h1>Cap ${c.number} · ${esc(c.title || 'Sin título')}</h1><div class="row" style="margin-top:6px">${statusChip(c.status)}<span class="chip">${plural(c.panels.length, 'panel', 'paneles')}</span></div></div>
     <div class="row"><button data-a="go" data-to="${mlink(m, 'caps')}">← Capítulos</button><button data-a="go" data-to="${mlink(m, 'armador', c.id)}">🧩 Armador</button><button data-a="dlChapter" data-id="${c.id}">⬇ Guion (Word)</button><button data-a="dlChapter" data-id="${c.id}" data-img="1">⬇ Word con imágenes</button><button data-a="dlChapterImgs" data-id="${c.id}">⬇ Imágenes</button><button class="danger" data-a="delCap" data-id="${c.id}">🗑️</button></div></div>
+    <div id="syncBanTop">${syncBannerHTML(m, c)}</div>
 
     <div class="grid2">
       <div class="panelbox"><h2>✍️ Escribir guion con IA</h2>
@@ -100,7 +101,6 @@ VIEWS.cap = () => {
 
     ${typeof coWriteHTML === 'function' ? coWriteHTML(m, c) : ''}
 
-    <div id="syncBan">${syncBannerHTML(m, c)}</div>
     <div class="row between" style="margin:22px 0 10px"><div><h2>🎞️ Guion · ${c.panels.length} paneles</h2><div class="small muted">✔ ${c.panels.filter(p => p.approved).length} aprobados para Fal.ai · solo los aprobados se generan</div></div>
       <div class="row"><button data-a="pasteScript">📋 Pegar mi guion</button><button data-a="addPanel" data-i="${c.panels.length}">＋ Añadir panel</button>${c.panels.length ? `<button class="ok" data-a="approveAll">✔ Aprobar todos</button>` : ''}</div></div>
     <div class="col" id="panels">${c.panels.map((p, i) => panelCard(m, c, p, i)).join('') || '<div class="empty">Aún no hay paneles. Escribe el guion con IA o añade paneles a mano.</div>'}</div>
@@ -223,7 +223,8 @@ ACT.genCliff = async el => {
     c.cliffhangers = (Array.isArray(r) ? r : r.options || []).slice(0, 3); c.chosenCliff = null; touch(m); render();
   }, 'Pensando finales…');
 };
-ACT.pickCliff = el => { const m = cur(); const c = chapterById(m, Route.a); c.chosenCliff = +el.dataset.i; const x = c.cliffhangers[c.chosenCliff]; const had = c.panels.some(p => p.cliff); c.panels = c.panels.filter(p => !p.cliff); c.panels.push(mkPanel({ size: 'XL', description: `${x.title ? x.title + ': ' : ''}${x.description}`, cliff: true, shot: 'plano dramático' })); scriptTouched(c); touch(m); render(); toast(had ? 'Final cambiado: reemplacé el panel final' : 'Final elegido: se añadió un panel final XL', 'ok'); };
+ACT.pickCliff = el => { const m = cur(); const c = chapterById(m, Route.a); c.chosenCliff = +el.dataset.i; const x = c.cliffhangers[c.chosenCliff]; const had = c.panels.some(p => p.cliff); c.panels = c.panels.filter(p => !p.cliff); c.panels.push(mkPanel({ size: 'XL', description: `${x.title ? x.title + ': ' : ''}${x.description}`, cliff: true, shot: 'plano dramático' })); scriptTouched(c); touch(m); render(); toast(had ? 'Final cambiado: reemplacé el panel final' : 'Final elegido: se añadió un panel final XL', 'ok');
+  if ((c.story?.text || '').trim()) setTimeout(() => { toast('📝 Ahora paso tu final nuevo al texto del capítulo…'); ACT.scriptToStory(document.querySelector('[data-a=scriptToStory]')); }, 300); };
 
 /* Continuidad local: muertos que aparecen vivos */
 function localDeadCheck(m, c) {
@@ -415,7 +416,7 @@ function syncBannerHTML(m, c) {
   return `<div class="alert warn" style="margin-top:14px"><div class="grow">🎞️ Cambiaste el guion de paneles (final, paneles nuevos o diálogos) y ${hasText ? 'tu texto del capítulo y tu biblia todavía no lo tienen' : 'tu biblia todavía no lo tiene'}.</div>
     ${jobBtn('sync:' + c.id, hasText ? '📝 Pasar los cambios a mi capítulo y a mi biblia' : '📜 Pasar los cambios a mi biblia', 'class="pri" data-a="scriptToStory"', 'Pasando cambios…')}<button class="sm ghost" data-a="scriptSyncSkip" title="No pasar nada">✕</button></div>`;
 }
-function syncBanner(m, c) { const el = document.getElementById('syncBan'); if (el) el.innerHTML = syncBannerHTML(m, c); }
+function syncBanner(m, c) { ['syncBan', 'syncBanTop'].forEach(id => { const el = document.getElementById(id); if (el) el.innerHTML = syncBannerHTML(m, c); }); }
 ACT.scriptSyncSkip = () => { const m = cur(); const c = chapterById(m, Route.a); c.syncAt = Date.now(); touch(m); syncBanner(m, c); };
 ACT.scriptToStory = async el => {
   const m = cur(); const c = chapterById(m, Route.a); if (typeof stSync === 'function' && $('#stTxt')) stSync(m, c);
