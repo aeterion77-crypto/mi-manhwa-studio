@@ -100,6 +100,7 @@ VIEWS.cap = () => {
 
     ${typeof coWriteHTML === 'function' ? coWriteHTML(m, c) : ''}
 
+    <div id="syncBan">${syncBannerHTML(m, c)}</div>
     <div class="row between" style="margin:22px 0 10px"><div><h2>🎞️ Guion · ${c.panels.length} paneles</h2><div class="small muted">✔ ${c.panels.filter(p => p.approved).length} aprobados para Fal.ai · solo los aprobados se generan</div></div>
       <div class="row"><button data-a="pasteScript">📋 Pegar mi guion</button><button data-a="addPanel" data-i="${c.panels.length}">＋ Añadir panel</button>${c.panels.length ? `<button class="ok" data-a="approveAll">✔ Aprobar todos</button>` : ''}</div></div>
     <div class="col" id="panels">${c.panels.map((p, i) => panelCard(m, c, p, i)).join('') || '<div class="empty">Aún no hay paneles. Escribe el guion con IA o añade paneles a mano.</div>'}</div>
@@ -132,12 +133,13 @@ function panelCard(m, c, p, i) {
 }
 ACT.setChars = el => { const m = cur(); const c = chapterById(m, Route.a); const p = c.panels[+el.dataset.i]; p.characters = el.value.split(',').map(s => s.trim()).filter(Boolean); unapproveP(p); touch(m); };
 function unapproveP(p) { if (!p.approved) return; p.approved = false; const el = document.getElementById('apv_' + p.id); if (el) el.innerHTML = apvHTML(p); }
-ACT.unapprove = el => { const m = cur(); const c = chapterById(m, Route.a); const p = c?.panels.find(x => x.id === el.dataset.pid); if (p) unapproveP(p); };
+ACT.unapprove = el => { const m = cur(); const c = chapterById(m, Route.a); const p = c?.panels.find(x => x.id === el.dataset.pid); if (p) unapproveP(p); if (c) { scriptTouched(c); touch(m); syncBanner(m, c); } };
+function scriptTouched(c) { c.scriptAt = Date.now(); }
 ACT.approvePanel = el => { const m = cur(); const c = chapterById(m, Route.a); const p = c.panels.find(x => x.id === el.dataset.id); p.approved = !p.approved; touch(m); const box = document.getElementById('apv_' + p.id); if (box) box.innerHTML = apvHTML(p); };
 ACT.approveAll = () => { const m = cur(); const c = chapterById(m, Route.a); c.panels.forEach(p => p.approved = true); touch(m); render(); toast(`${plural(c.panels.length, 'panel aprobado', 'paneles aprobados')} para Fal.ai`, 'ok'); };
 ACT.setSfx = el => { const m = cur(); const c = chapterById(m, Route.a); c.panels[+el.dataset.i].sfx = el.value.split(',').map(s => s.trim()).filter(Boolean); touch(m); };
-ACT.addPanel = el => { const m = cur(); const c = chapterById(m, Route.a); c.panels.splice(+el.dataset.i, 0, mkPanel()); touch(m); render(); };
-ACT.delPanel = async el => { const m = cur(); const c = chapterById(m, Route.a); if (!await confirmBox(`¿Borrar el panel #${+el.dataset.i + 1}?`)) return; c.panels.splice(+el.dataset.i, 1); touch(m); render(); };
+ACT.addPanel = el => { const m = cur(); const c = chapterById(m, Route.a); c.panels.splice(+el.dataset.i, 0, mkPanel()); scriptTouched(c); touch(m); render(); };
+ACT.delPanel = async el => { const m = cur(); const c = chapterById(m, Route.a); if (!await confirmBox(`¿Borrar el panel #${+el.dataset.i + 1}?`)) return; c.panels.splice(+el.dataset.i, 1); scriptTouched(c); touch(m); render(); };
 ACT.movePanel = el => { const m = cur(); const c = chapterById(m, Route.a); const i = +el.dataset.i, j = i + (+el.dataset.d); if (j < 0 || j >= c.panels.length) return; [c.panels[i], c.panels[j]] = [c.panels[j], c.panels[i]]; touch(m); render(); };
 ACT.addDlg = el => { const m = cur(); const c = chapterById(m, Route.a); c.panels[+el.dataset.i].dialogues.push({ who: '', type: 'normal', text: '' }); touch(m); render(); };
 ACT.delDlg = el => { const m = cur(); const c = chapterById(m, Route.a); c.panels[+el.dataset.i].dialogues.splice(+el.dataset.j, 1); touch(m); render(); };
@@ -196,6 +198,7 @@ FORMATO: una línea JSON por objeto, sin nada más (JSONL):
   }, 'Escribiendo guion…');
 };
 function applyScriptText(m, c, text, stop) {
+  c.scriptAt = c.syncAt = Date.now();
     const rows = parseJSONL(text);
     const panels = rows.filter(r => r.t === 'panel');
     if (!panels.length) throw new Error('La IA no devolvió paneles. Intenta de nuevo.');
@@ -220,7 +223,7 @@ ACT.genCliff = async el => {
     c.cliffhangers = (Array.isArray(r) ? r : r.options || []).slice(0, 3); c.chosenCliff = null; touch(m); render();
   }, 'Pensando finales…');
 };
-ACT.pickCliff = el => { const m = cur(); const c = chapterById(m, Route.a); c.chosenCliff = +el.dataset.i; const x = c.cliffhangers[c.chosenCliff]; if (!c.panels.some(p => p.cliff)) c.panels.push(mkPanel({ size: 'XL', description: x.description, cliff: true, shot: 'plano dramático' })); touch(m); render(); toast('Final elegido: se añadió un panel final XL'); };
+ACT.pickCliff = el => { const m = cur(); const c = chapterById(m, Route.a); c.chosenCliff = +el.dataset.i; const x = c.cliffhangers[c.chosenCliff]; const had = c.panels.some(p => p.cliff); c.panels = c.panels.filter(p => !p.cliff); c.panels.push(mkPanel({ size: 'XL', description: `${x.title ? x.title + ': ' : ''}${x.description}`, cliff: true, shot: 'plano dramático' })); scriptTouched(c); touch(m); render(); toast(had ? 'Final cambiado: reemplacé el panel final' : 'Final elegido: se añadió un panel final XL', 'ok'); };
 
 /* Continuidad local: muertos que aparecen vivos */
 function localDeadCheck(m, c) {
@@ -403,3 +406,43 @@ FORMATO JSONL (una línea por panel, nada más):
     }, 'Ordenando…');
   };
 };
+
+/* ---------- guion de paneles → texto del capítulo → biblia ---------- */
+const scriptAhead = c => (c.panels || []).length && ((c.scriptAt || 0) > (c.syncAt || 0) || (c.scriptAt == null && c.syncAt == null)); // capítulos de antes: no sé si están al día, así que pregunto
+function syncBannerHTML(m, c) {
+  if (!scriptAhead(c)) return '';
+  const hasText = !!(c.story?.text || '').trim();
+  return `<div class="alert warn" style="margin-top:14px"><div class="grow">🎞️ Cambiaste el guion de paneles (final, paneles nuevos o diálogos) y ${hasText ? 'tu texto del capítulo y tu biblia todavía no lo tienen' : 'tu biblia todavía no lo tiene'}.</div>
+    ${jobBtn('sync:' + c.id, hasText ? '📝 Pasar los cambios a mi capítulo y a mi biblia' : '📜 Pasar los cambios a mi biblia', 'class="pri" data-a="scriptToStory"', 'Pasando cambios…')}<button class="sm ghost" data-a="scriptSyncSkip" title="No pasar nada">✕</button></div>`;
+}
+function syncBanner(m, c) { const el = document.getElementById('syncBan'); if (el) el.innerHTML = syncBannerHTML(m, c); }
+ACT.scriptSyncSkip = () => { const m = cur(); const c = chapterById(m, Route.a); c.syncAt = Date.now(); touch(m); syncBanner(m, c); };
+ACT.scriptToStory = async el => {
+  const m = cur(); const c = chapterById(m, Route.a); if (typeof stSync === 'function' && $('#stTxt')) stSync(m, c);
+  const base = (c.story?.text || '').trim();
+  if (!base) { c.syncAt = Date.now(); touch(m); return bibleFromChapter(m, c, el, 'Los cambios que hice en el guion de paneles (incluido el final) son correctos.'); }
+  const key = 'sync:' + c.id; if (jobRunning(key)) return toast('Ya estoy pasando los cambios ⏳');
+  const words = base.split(/\s+/).length;
+  const prompt = `Eres el escritor de este manhwa. El autor CAMBIÓ EL GUION DE PANELES del Capítulo ${c.number} (por ejemplo cambió el final, agregó o quitó paneles, cambió diálogos o lo que pasa). Actualiza el TEXTO del capítulo para que cuente exactamente lo que dice el guion ahora.
+Reglas: conserva el estilo, la voz y todo lo que no cambió; reescribe o agrega solo lo necesario (por ejemplo el final nuevo, las escenas nuevas); usa los diálogos del guion. Devuelve el capítulo COMPLETO (unas ${words} palabras o más si se agregaron escenas).
+
+${stCtx(m, c)}
+
+GUION DE PANELES ACTUAL (esto manda):
+${scriptText(c).slice(0, 40000)}
+
+TEXTO ACTUAL DEL CAPÍTULO:
+"""
+${base.slice(0, 50000)}
+"""
+
+Responde SOLO con el capítulo completo actualizado, sin título y sin comentarios.`;
+  const out = cleanGen(await stCall(m, c, el, prompt, `Pasar guion al texto · Cap ${c.number}`, Math.min(32000, Math.round(words * 2.8) + 2500), { key, kind: 'stSync', meta: { mid: m.id, cid: c.id }, link: mlink(m, 'cap', c.id) }));
+  if (!out) return; applySync(m, c, out, true);
+};
+function applySync(m, c, out, askBible) {
+  const s = story(c); stSnap(c); s.text = out; s.last = { start: 0, end: out.length }; c.syncAt = Date.now(); touch(m); render();
+  toast('📝 Tu capítulo ya tiene los cambios del guion. ↩️ Deshacer si algo no te gusta.', 'ok');
+  if (askBible) setTimeout(async () => { if (await confirmBox('¿Pasar también estos cambios a tu biblia y a todos lados?', { ok: '📜 Sí, actualizar mi biblia', danger: false, title: 'Actualizar mi biblia' })) bibleFromChapter(m, c, null, ''); }, 400);
+}
+JOB_DONE.stSync = (m, meta, text) => { const c = chapterById(m, meta.cid); const out = cleanGen(text); if (c && out) applySync(m, c, out, false); };

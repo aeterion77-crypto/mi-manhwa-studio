@@ -240,12 +240,15 @@ function gxBar(m, ph = '') {
 }
 
 /* 📜 El capítulo manda: actualizar la biblia y todo con lo que escribí en él */
-function capTruth(c) { const t = (c.story?.text || '').trim(); return t ? t.slice(0, 45000) : (c.panels || []).length ? scriptText(c).slice(0, 45000) : (c.premise || ''); }
+function capTruth(c) { const t = (c.story?.text || '').trim(); const sc = (c.panels || []).length ? scriptText(c) : '';
+  if (t && sc && (c.scriptAt || 0) > (c.syncAt || 0)) return `TEXTO DEL CAPÍTULO:\n${t.slice(0, 30000)}\n\nGUION DE PANELES (es MÁS NUEVO que el texto: si no coinciden, MANDA EL GUION, por ejemplo el final):\n${sc.slice(0, 25000)}`;
+  return t ? t.slice(0, 45000) : sc ? sc.slice(0, 45000) : (c.premise || ''); }
 async function bibleFromChapter(m, c, el, focus = '', done = null) {
   const body = capTruth(c); if (!body.trim()) return toast('Este capítulo todavía no tiene texto ni guion', 'err');
   const q = focus
     ? `En el Capítulo ${c.number} decidí lo siguiente y ES CORRECTO (no son errores, así lo quiero):\n${focus}\n Actualiza mi biblia y todo mi manhwa para que coincida.\n\nCAPÍTULO ${c.number} (la verdad):\n${body}`
     : `Actualiza mi biblia y todo mi manhwa con lo que pasa en el Capítulo ${c.number}: todo lo que cambié o agregué en él es CORRECTO.\n\nCAPÍTULO ${c.number} (la verdad):\n${body}`;
+  if (!done) done = () => { if (!(c.story?.text || '').trim()) c.syncAt = Date.now(); };
   let r; await busy(el, async () => { r = await aiJSON(gxPrompt(m, q, { fromChapter: c.id }), { max_tokens: 16000, temperature: 0.2, title: `Actualizar biblia con el Cap ${c.number}`, estOut: 4000 }); }, 'Comparando con tu biblia…');
   if (!r) return;
   gxReview(m, focus ? `Cap ${c.number}: así lo quiero` : `Actualizar mi biblia con el Cap ${c.number}`, r, { skipChapter: c.id, done });
