@@ -17,10 +17,10 @@ function coWriteHTML(m, c) {
       <label class="f">📝 Nota para Claude (estilo y tono de este capítulo)<input ${bindAttr(s, 'note')} value="${esc(s.note)}" placeholder="Ej. narración en tercera persona, oscuro, frases cortas, mucho diálogo"></label>
       <label class="f">🎯 ¿Qué quieres que pase ahora? (opcional)<input id="stWant" value="${esc(s.want || '')}" placeholder="Ej. Lira llega y detiene a Draven"></label>
     </div>
-    <div class="stchange"><div class="row nw" style="align-items:flex-start;gap:8px"><span style="font-size:20px;padding-top:6px">✏️</span><textarea id="stChange" rows="2" placeholder="¿Qué quieres cambiar de este capítulo? Ej. “Tomás no existe: que Elías esté solo en esa escena”, “que la pelea la gane Evangeline”, “más oscuro el final”"></textarea><button class="pri" data-a="stChangeRun" ${s.text.trim() || c.premise ? '' : 'disabled'}>Reescribir con el cambio</button></div><div class="tiny dim" style="margin:4px 0 0 30px">Reescribe todo el capítulo con tu cambio, sin contradecir tu biblia. Si el cambio es para toda la historia, usa la barra 🪄 de la Biblia o de Capítulos.</div></div>
+    <div class="stchange"><div class="row nw" style="align-items:flex-start;gap:8px"><span style="font-size:20px;padding-top:6px">✏️</span><textarea id="stChange" rows="2" placeholder="¿Qué quieres cambiar de este capítulo? Ej. “Tomás no existe: que Elías esté solo en esa escena”, “que la pelea la gane Evangeline”, “más oscuro el final”"></textarea>${jobBtn('change:' + c.id, 'Reescribir con el cambio', `class="pri" data-a="stChangeRun" ${s.text.trim() || c.premise ? '' : 'disabled'}`, 'Reescribiendo…')}</div><div class="tiny dim" style="margin:4px 0 0 30px">Reescribe todo el capítulo con tu cambio, sin contradecir tu biblia. Si el cambio es para toda la historia, usa la barra 🪄 de la Biblia o de Capítulos.</div></div>
     <div class="stfull row" style="margin:6px 0 10px">
       <span class="small"><b>Dos formas:</b></span>
-      <button class="pri" data-a="stFull">📝 Escribir el capítulo COMPLETO</button>
+      ${jobBtn('full:' + c.id, '📝 Escribir el capítulo COMPLETO', 'class="pri" data-a="stFull"', 'Escribiendo capítulo…')}
       <select id="stLen" style="width:auto">${[['corto', 'Corto (~1,500 palabras)'], ['normal', 'Normal (~3,000 palabras)'], ['largo', 'Largo (~5,000 palabras)']].map(([v, l]) => `<option value="${v}" ${(s.len || 'normal') === v ? 'selected' : ''}>${l}</option>`).join('')}</select>
       <span class="small muted">o escribe junto con Claude párrafo por párrafo con ✨ Continuar (abajo).</span>
     </div>
@@ -59,8 +59,8 @@ ${brain(m, { skipChapterId: c.id, maxChars: 30000 })}
 
 CAPÍTULO ${c.number}${c.title ? ' "' + c.title + '"' : ''}${c.premise ? '\nIdea del capítulo: ' + c.premise : ''}
 ${story(c).note ? 'NOTA DEL AUTOR (estilo y tono, obedécela): ' + story(c).note : ''}`;
-async function stCall(m, c, el, prompt, title, max = 2500) {
-  let out; await busy(el, async () => { const { text } = await ai(prompt, { max_tokens: max, temperature: 0.9, estOut: Math.round(max * 0.5), title }); out = text; }, 'Claude escribiendo…');
+async function stCall(m, c, el, prompt, title, max = 2500, job = null) {
+  let out; await busy(el, async () => { const { text } = await ai(prompt, { max_tokens: max, temperature: 0.9, estOut: Math.round(max * 0.5), title, job }); out = text; }, 'Claude escribiendo…');
   return out;
 }
 const cleanGen = t => String(t || '').replace(/^```[a-z]*\n?|```$/gim, '').replace(/^(claro|aquí|perfecto)[^\n]*\n+/i, '').trim();
@@ -213,14 +213,20 @@ ${prevChapterTail(m, c)}
 ${finish ? `\nTEXTO DEL AUTOR HASTA AHORA (sigue su estilo exacto):\n"""\n${s.text.slice(-15000)}\n"""` : ''}
 
 Responde SOLO con el texto del capítulo, sin título, sin comentarios y sin notas.`;
-  const out = cleanGen(await stCall(m, c, el, prompt, finish ? `Terminar Cap ${c.number}` : `Escribir Cap ${c.number} completo`, Math.min(32000, Math.round(words * 2.6) + 1500)));
+  const key = 'full:' + c.id; if (jobRunning(key)) return toast('Ya estoy escribiendo este capítulo ⏳');
+  const out = cleanGen(await stCall(m, c, el, prompt, finish ? `Terminar Cap ${c.number}` : `Escribir Cap ${c.number} completo`, Math.min(32000, Math.round(words * 2.6) + 1500), { key, kind: 'stFull', meta: { mid: m.id, cid: c.id, finish }, link: mlink(m, 'cap', c.id) }));
   if (!out) return;
+  applyFull(m, c, out, finish);
+};
+function applyFull(m, c, out, finish) {
+  const s = story(c);
   stSnap(c);
   if (finish) { const sep = /\n$/.test(s.text) ? '\n' : '\n\n'; const start = s.text.length + sep.length; s.text += sep + out; s.last = { start, end: s.text.length }; }
   else { s.text = out; s.last = { start: 0, end: out.length }; }
   s.focus = true; touch(m); render();
   toast(`📝 Capítulo ${finish ? 'terminado' : 'escrito'}: ${out.split(/\s+/).length.toLocaleString('es')} palabras. Edítalo, pídele cambios, o conviértelo en guion.`, 'ok');
-};
+}
+JOB_DONE.stFull = (m, meta, text) => { const c = chapterById(m, meta.cid); const out = cleanGen(text); if (c && out) applyFull(m, c, out, meta.finish); };
 
 /* ✏️ reescribir el capítulo completo con un cambio */
 ACT.stChangeRun = async el => {
@@ -247,12 +253,18 @@ ${base.slice(0, 60000)}
 """
 
 Responde SOLO con el capítulo completo reescrito, sin título y sin comentarios.`;
-  const out = cleanGen(await stCall(m, c, el, prompt, `Reescribir Cap ${c.number} con un cambio`, Math.min(32000, Math.round(words * 2.6) + 1500)));
+  const key = 'change:' + c.id; if (jobRunning(key)) return toast('Ya estoy reescribiendo este capítulo ⏳');
+  const out = cleanGen(await stCall(m, c, el, prompt, `Reescribir Cap ${c.number} con un cambio`, Math.min(32000, Math.round(words * 2.6) + 1500), { key, kind: 'stChange', meta: { mid: m.id, cid: c.id, ch }, link: mlink(m, 'cap', c.id) }));
   if (!out) return;
+  applyChange(m, c, out, ch);
+};
+function applyChange(m, c, out, ch) {
+  const s = story(c);
   stSnap(c); s.text = out; s.last = { start: 0, end: out.length }; s.focus = true; (c.changes ||= []).unshift({ at: Date.now(), text: ch });
   const hasPanels = (c.panels || []).length; touch(m); render(); const t = $('#stChange'); if (t) t.value = '';
   toast(`✏️ Capítulo reescrito con tu cambio.${hasPanels ? ' Tu guion de paneles es de antes: toca “🎞️ Convertir en guion de paneles” para rehacerlo con este texto.' : ''} ↩️ Deshacer si no te gusta.`, 'ok');
-};
+}
+JOB_DONE.stChange = (m, meta, text) => { const c = chapterById(m, meta.cid); const out = cleanGen(text); if (c && out) applyChange(m, c, out, meta.ch); };
 
 /* ir exactamente al lugar del capítulo */
 function taScrollTo(t, a, b) {

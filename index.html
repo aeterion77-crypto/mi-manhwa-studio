@@ -364,6 +364,11 @@ input[type=radio],input[type=checkbox]{width:20px;min-height:20px;height:20px;fl
 .fixgo:hover{background:rgba(255,255,255,.06)}
 .fixgo.on{outline:2px solid var(--neon)}
 
+#jobbar{position:fixed;top:72px;right:18px;z-index:900;display:none;min-width:280px;max-width:420px}
+.jobrow{display:flex;gap:8px;align-items:center;background:#1d1a24;border:1px solid var(--neon);border-radius:12px;padding:8px 12px;margin-bottom:6px;box-shadow:0 6px 24px rgba(0,0,0,.4);font-size:14px}
+.jobrow.ok{border-color:var(--ok)}.jobrow.err{border-color:#e55}.jobrow a{cursor:pointer;color:var(--neon);white-space:nowrap;font-size:13px}
+@media(max-width:700px){#jobbar{top:auto;bottom:12px;left:12px;right:12px;max-width:none}}
+
 </style>
 </head>
 <body>
@@ -888,20 +893,24 @@ function premiumAI(prompt, title) {
     bg.querySelector('[data-x=ok]').onclick = () => { const t = bg.querySelector('#pans').value.trim(); if (!t) return toast('Pega la respuesta de Claude', 'err'); bg.remove(); res({ text: t, stop: 'end_turn' }); };
   });
 }
-async function ai(prompt, { system = '', max_tokens = 4000, temperature = 0.8, estOut, confirmed = false, title = '' } = {}) {
+const JOB_DONE = {}; // qué hacer con un trabajo que terminó mientras la app estaba cerrada
+async function ai(prompt, { system = '', max_tokens = 4000, temperature = 0.8, estOut, confirmed = false, title = '', job = null } = {}) {
   const full = (system ? system + '\n\n' : '') + prompt;
   // 1) Claude Code conectado: automático y con tu plan (sin llave, sin copiar/pegar)
   if (typeof CC !== 'undefined' && CC.ok && CC.info?.ask) {
-    const tt = toast('🔌 Tu Claude Code está trabajando' + (title ? ': ' + title : '') + '… (puede tardar un par de minutos)');
-    try { const r = await ccFetch('/ask', { method: 'POST', body: JSON.stringify({ prompt: full, title }) }, 16 * 60 * 1000); return { text: r.text || '', stop: 'end_turn' }; }
-    catch (e) { toast('Claude Code no respondió (' + e.message + '). Uso el otro modo.', 'err'); }
+    const jk = jobStart(job?.key, '🔌 ' + (title || 'Claude Code trabajando'));
+    try {
+      const text = CC.info.jobs ? await ccJob(full, title, job) : (await ccFetch('/ask', { method: 'POST', body: JSON.stringify({ prompt: full, title, model: ccModel() }) }, 31 * 60 * 1000)).text;
+      jobEnd(jk, true, job?.link); return { text: text || '', stop: 'end_turn' };
+    } catch (e) { jobEnd(jk, false); toast('Claude Code no respondió (' + e.message + '). Uso el otro modo.', 'err'); }
   } else if (typeof CC !== 'undefined' && CC.ok && !CC.info?.ask) toast('Actualiza tu puente de Claude Code para que haga esto solo (te mandé el archivo nuevo).');
   if (isPremium()) return premiumAI(full, title);
   if (!confirmed) {
     const line = aiLine(full.length, estOut ?? Math.round(max_tokens * 0.4), max_tokens, title || 'Texto con Claude');
     if (!await confirmCost(title || 'Usar Claude', [line])) throw new Error('Cancelado');
   }
-  const r = await callFn('ai', { model: S.settings.model || DEFAULT_MODEL, max_tokens, temperature, system, messages: [{ role: 'user', content: prompt }] });
+  const jk2 = jobStart(job?.key, title || 'Claude escribiendo'); let r;
+  try { r = await callFn('ai', { model: S.settings.model || DEFAULT_MODEL, max_tokens, temperature, system, messages: [{ role: 'user', content: prompt }] }); jobEnd(jk2, true, job?.link); } catch (e) { jobEnd(jk2, false); throw e; }
   if (r.usage) { const M = CLAUDE_MODELS[r.model] || CLAUDE_MODELS[S.settings.model] || CLAUDE_MODELS[DEFAULT_MODEL]; addSpend((r.usage.input_tokens * M.in + r.usage.output_tokens * M.out) / 1e6); }
   return { text: r.text || '', stop: r.stop_reason };
 }
@@ -1484,7 +1493,7 @@ VIEWS.cap = () => {
         <label class="f">Describe el capítulo<textarea ${bindAttr(c, 'premise')} placeholder="Ej. Cap 12, pelea en la azotea entre Kael y Draven bajo la lluvia. Lira llega al final.">${esc(c.premise)}</textarea></label>
         <div class="grid2"><label class="f">Director de paneles<select ${bindAttr(c, 'tone')}>${[['auto', 'Automático'], ['pelea', 'Pelea (chico, chico, ¡GRANDE!)'], ['drama', 'Drama (grandes y lentos)'], ['romance', 'Romance'], ['misterio', 'Misterio / terror'], ['comedia', 'Comedia']].map(([v, l]) => `<option value="${v}" ${c.tone === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
         <label class="f">Paneles<input id="npan" type="number" min="5" max="60" value="${c.panelTarget || 30}"></label></div>
-        <div class="row"><button class="pri big" data-a="writeScript">✨ Escribir guion (${c.panelTarget || 30} paneles)</button><button data-a="pasteScript">📋 Ya lo tengo: pegar mi guion</button>${c.panels.length ? '<button data-a="applyDirector">🎬 Aplicar director</button>' : ''}</div>
+        <div class="row">${jobBtn('script:' + c.id, `✨ Escribir guion (${c.panelTarget || 30} paneles)`, 'class="pri big" data-a="writeScript"', 'Escribiendo guion…')}<button data-a="pasteScript">📋 Ya lo tengo: pegar mi guion</button>${c.panels.length ? '<button data-a="applyDirector">🎬 Aplicar director</button>' : ''}</div>
         <p class="tiny dim">Usa el cerebro completo: personajes, LoRAs, trigger words, fichas canon y capítulos anteriores.${c.story?.text?.trim() ? ' <b>Además usa lo que escribiste en “✍️ Escribir con Claude”.</b>' : ''}</p>
       </div>
       <div class="col">
@@ -1593,8 +1602,13 @@ FORMATO: una línea JSON por objeto, sin nada más (JSONL):
 {"t":"panel","size":"S|M|L|XL","shot":"plano (primer plano, plano medio, plano general, picado, contrapicado…)","description":"qué se ve, en español","characters":["Nombre exacto"],"dialogues":[{"who":"Nombre o Narración","type":"normal|grito|pensamiento|narracion|susurro","text":"…"}],"sfx":["BOOM"],"prompt_en":"visual scene description in English for an image model: action, pose, expression, setting, lighting, camera angle (no character names, no text)"}
 … (${n} líneas de panel) …
 {"t":"cliff","title":"…","description":"opción de final para enganchar"}  (3 líneas cliff)`;
+  const key = 'script:' + c.id; if (jobRunning(key)) return toast('Ya estoy escribiendo este guion ⏳ (mira la barra de arriba)');
   await busy(el, async () => {
-    const { text, stop } = await ai(prompt, { max_tokens: 16000, temperature: 0.85, estOut: n * 260 + 400, title: `Escribir guion de ${n} paneles` });
+    const { text, stop } = await ai(prompt, { max_tokens: 16000, temperature: 0.85, estOut: n * 260 + 400, title: `Guion Cap ${c.number} · ${n} paneles`, job: { key, kind: 'script', meta: { mid: m.id, cid: c.id }, link: mlink(m, 'cap', c.id) } });
+    applyScriptText(m, c, text, stop);
+  }, 'Escribiendo guion…');
+};
+function applyScriptText(m, c, text, stop) {
     const rows = parseJSONL(text);
     const panels = rows.filter(r => r.t === 'panel');
     if (!panels.length) throw new Error('La IA no devolvió paneles. Intenta de nuevo.');
@@ -1608,8 +1622,8 @@ FORMATO: una línea JSON por objeto, sin nada más (JSONL):
     touch(m); render();
     toast(`Guion listo: ${c.panels.length} paneles ✨ Revisa, edita y aprueba los que pasen a Fal.ai.${stop === 'max_tokens' ? ' (se cortó al final, añade los que falten)' : ''}`, 'ok');
     const dead = localDeadCheck(m, c); if (dead.length) toast('⚠ ' + dead[0], 'err');
-  }, 'Escribiendo guion…');
-};
+}
+JOB_DONE.script = (m, meta, text) => { const c = chapterById(m, meta.cid); if (c) applyScriptText(m, c, text, 'end_turn'); };
 ACT.genCliff = async el => {
   const m = cur(); const c = chapterById(m, Route.a);
   await busy(el, async () => {
@@ -3111,6 +3125,9 @@ VIEWS.config = () => {
       <div class="panelbox"><h2>🤖 IA de texto (Claude)</h2>
         <label class="row nw res" style="cursor:pointer"><input type="radio" name="aimode" value="premium" ${isPremium() ? 'checked' : ''} data-change="setAiMode"><div><b>Claude Premium (tu plan actual) · $0 extra</b><div class="small muted">La app te prepara las instrucciones, las pegas en Claude y pegas la respuesta. Usa el mismo Claude que ya pagas.</div></div></label>
         <label class="row nw res" style="cursor:pointer"><input type="radio" name="aimode" value="api" ${!isPremium() ? 'checked' : ''} data-change="setAiMode"><div><b>Automático con API key · cobro por uso</b><div class="small muted">Todo se hace solo con un clic. Antes de cada uso te digo el precio y confirmas.</div></div></label>
+        <div style="margin-top:10px"><b>🔌 Velocidad de tu Claude Code</b>
+          <label class="row nw res" style="cursor:pointer"><input type="radio" name="ccspeed" value="calidad" ${st.ccSpeed !== 'rapido' ? 'checked' : ''} data-change="setCcSpeed"><div><b>💎 Mejor calidad</b><div class="small muted">Usa el modelo más potente de tu plan. Un guion de 30 paneles puede tardar 3 a 8 minutos.</div></div></label>
+          <label class="row nw res" style="cursor:pointer"><input type="radio" name="ccspeed" value="rapido" ${st.ccSpeed === 'rapido' ? 'checked' : ''} data-change="setCcSpeed"><div><b>⚡ Más rápido</b><div class="small muted">Usa Claude Sonnet: más o menos el doble de rápido, muy buena calidad. También es gratis con tu plan.</div></div></label></div>
         ${!isPremium() ? `<label class="f">Modelo<select ${bindAttr(st, 'model')} data-onchange="saveSetR">${Object.entries(CLAUDE_MODELS).map(([k, v]) => `<option value="${k}" ${st.model === k ? 'selected' : ''}>${v.label} — $${v.in} entrada / $${v.out} salida por millón de tokens</option>`).join('')}</select></label>
           <div class="tiny dim">Ejemplo: un guion de 30 paneles con ${(CLAUDE_MODELS[st.model] || {}).label || st.model} cuesta ≈ ${money(costAI(45000, 8200, 16000).cost)}.</div>` : ''}
       </div>
@@ -3140,6 +3157,7 @@ AFTER.config = async () => {
   try { const e = await navigator.storage.estimate(); const el = $('#stor'); if (el) el.textContent = `Espacio usado en este dispositivo: ${(e.usage / 1e6).toFixed(1)} MB. Nube gratis de Supabase: 1 GB de imágenes y 500 MB de datos.`; } catch (e) { }
 };
 ACT.saveSet = () => saveSettings();
+ACT.setCcSpeed = el => { S.settings.ccSpeed = el.value; saveSettings(); toast(el.value === 'rapido' ? '⚡ Modo rápido (Sonnet)' : '💎 Mejor calidad'); };
 ACT.setAiMode = el => { S.settings.aiMode = el.value; saveSettings(); render(); toast(el.value === 'premium' ? 'Usando tu Claude Premium (copiar y pegar, $0 extra)' : 'Modo automático con API: te mostraré el precio antes de cada uso'); };
 ACT.updPrices = el => busy(el, async () => { await refreshFalPrices(); render(); toast('Precios actualizados', 'ok'); }, 'Consultando…');
 ACT.saveSetR = () => { S.settings.modelChosen = true; saveSettings(); setTimeout(render, 50); };
@@ -3900,6 +3918,7 @@ async function ccPing() {
   else try { CC.info = await ccFetch('/status'); CC.ok = !!CC.info.ok; } catch (e) { CC.ok = false; }
   $$('#ccPill').forEach(p => { p.classList.toggle('on', CC.ok); p.textContent = `🔌 CONECTADO A CLAUDE CODE: ${CC.ok ? 'SÍ' : 'NO'}`; });
   if (was !== CC.ok && CC.ok) toast('🔌 Conectado a Claude Code', 'ok');
+  if (CC.ok && typeof jobsResume === 'function') jobsResume();
   return CC.ok;
 }
 function ccStartPolling() { clearInterval(CC.timer); ccPing(); CC.timer = setInterval(() => { if (!document.hidden && ccConf().token) ccPing(); }, 20000); }
@@ -3958,9 +3977,10 @@ const cors = {
 };
 const send = (res, code, obj) => { res.writeHead(code, { ...cors, 'Content-Type': 'application/json' }); res.end(JSON.stringify(obj)); };
 
-function runClaude(prompt) {
+function runClaude(prompt, model) {
   return new Promise((ok, fail) => {
-    const p = spawn(BIN, ['-p', 'Sigue las instrucciones que llegan por la entrada estándar.', '--output-format', 'json', ...EXTRA], { cwd: CWD, shell: process.platform === 'win32' });
+    const mdl = ['opus', 'sonnet', 'haiku'].includes(model) ? ['--model', model] : [];
+    const p = spawn(BIN, ['-p', 'Sigue las instrucciones que llegan por la entrada estándar.', '--output-format', 'json', ...mdl, ...EXTRA], { cwd: CWD, shell: process.platform === 'win32' });
     let out = '', err = '';
     const timer = setTimeout(() => { p.kill(); fail(new Error('Claude Code tardó demasiado')); }, 15 * 60 * 1000);
     p.stdout.on('data', d => out += d); p.stderr.on('data', d => err += d);
@@ -3980,21 +4000,43 @@ const GUIDE = {
   video: 'Es un PROYECTO DE VIDEO (tracks con clips: start, dur, in en segundos; vol en dB; fadeIn/fadeOut; fx = efectos por código; notes = notas; words = transcripción con t0/t1; subs = subtítulos).',
 };
 
+// trabajos: el resultado se guarda aunque cierres o recargues la app
+const JOBS_FILE = join(CWD, '.trabajos-puente.json');
+let JOBS = {}; try { JOBS = JSON.parse(readFileSync(JOBS_FILE, 'utf8')); } catch {}
+for (const j of Object.values(JOBS)) if (j.status === 'running') { j.status = 'error'; j.error = 'El puente se cerró mientras trabajaba. Vuelve a intentarlo.'; }
+function saveJobs() { const now = Date.now(); for (const [k, j] of Object.entries(JOBS)) if (now - j.at > 3 * 24 * 3600 * 1000) delete JOBS[k]; try { writeFileSync(JOBS_FILE, JSON.stringify(JOBS)); } catch {} }
+function startJob(prompt, title, model) {
+  const id = randomBytes(8).toString('hex'); JOBS[id] = { status: 'running', title: String(title || 'tarea'), at: Date.now() }; saveJobs();
+  console.log('🤖 Claude Code trabajando' + (model ? ' (' + model + ')' : '') + ': ' + JOBS[id].title + '…');
+  runClaude(String(prompt || ''), model).then(out => { JOBS[id] = { ...JOBS[id], status: 'done', text: typeof out === 'string' ? out : JSON.stringify(out), done: Date.now() }; console.log('   ✔ listo: ' + JOBS[id].title); saveJobs(); })
+    .catch(e => { JOBS[id] = { ...JOBS[id], status: 'error', error: e.message, done: Date.now() }; console.log('   ✕ ' + e.message); saveJobs(); });
+  return id;
+}
+
 const server = http.createServer(async (req, res) => {
   if (req.method === 'OPTIONS') { res.writeHead(204, cors); return res.end(); }
   if (req.headers['x-token'] !== TOKEN) return send(res, 401, { error: 'Llave incorrecta' });
   const url = new URL(req.url, 'http://localhost');
-  if (req.method === 'GET' && url.pathname === '/status') return send(res, 200, { ok: true, cwd: CWD, bin: BIN, ask: true });
+  if (req.method === 'GET' && url.pathname === '/status') return send(res, 200, { ok: true, cwd: CWD, bin: BIN, ask: true, jobs: true, models: true });
   if (req.method === 'GET' && url.pathname === '/file') { // archivos que Claude Code genere en la carpeta (por ejemplo un video renderizado)
     const p = resolve(CWD, url.searchParams.get('path') || '');
     if (!p.startsWith(CWD + sep) || !existsSync(p) || !statSync(p).isFile()) return send(res, 404, { error: 'No existe' });
     const types = { '.mp4': 'video/mp4', '.webm': 'video/webm', '.mp3': 'audio/mpeg', '.wav': 'audio/wav', '.png': 'image/png', '.jpg': 'image/jpeg', '.json': 'application/json' };
     res.writeHead(200, { ...cors, 'Content-Type': types[extname(p)] || 'application/octet-stream' }); return createReadStream(p).pipe(res);
   }
+  if (req.method === 'POST' && url.pathname === '/job') {
+    let body = ''; for await (const ch of req) body += ch;
+    let j; try { j = JSON.parse(body); } catch { return send(res, 400, { error: 'JSON inválido' }); }
+    return send(res, 200, { id: startJob(j.prompt, j.title, j.model) });
+  }
+  if (req.method === 'GET' && url.pathname === '/job') {
+    const j = JOBS[url.searchParams.get('id') || '']; if (!j) return send(res, 404, { error: 'No encontré ese trabajo' });
+    return send(res, 200, { status: j.status, text: j.status === 'done' ? j.text : undefined, error: j.error, at: j.at, done: j.done });
+  }
   if (req.method === 'POST' && url.pathname === '/ask') { // la app le pide a tu Claude Code cualquier tarea de texto (biblia, guiones, ideas…)
     let body = ''; for await (const ch of req) body += ch;
     let j; try { j = JSON.parse(body); } catch { return send(res, 400, { error: 'JSON inválido' }); }
-    try { console.log('🤖 Claude Code trabajando: ' + String(j.title || 'tarea') + '…'); const out = await runClaude(String(j.prompt || '')); console.log('   ✔ listo'); return send(res, 200, { text: typeof out === 'string' ? out : JSON.stringify(out) }); }
+    try { console.log('🤖 Claude Code trabajando: ' + String(j.title || 'tarea') + '…'); const out = await runClaude(String(j.prompt || ''), j.model); console.log('   ✔ listo'); return send(res, 200, { text: typeof out === 'string' ? out : JSON.stringify(out) }); }
     catch (e) { console.log('   ✕ ' + e.message); return send(res, 500, { error: e.message }); }
   }
   if (req.method === 'POST' && url.pathname === '/edit') {
@@ -5196,10 +5238,10 @@ function coWriteHTML(m, c) {
       <label class="f">📝 Nota para Claude (estilo y tono de este capítulo)<input ${bindAttr(s, 'note')} value="${esc(s.note)}" placeholder="Ej. narración en tercera persona, oscuro, frases cortas, mucho diálogo"></label>
       <label class="f">🎯 ¿Qué quieres que pase ahora? (opcional)<input id="stWant" value="${esc(s.want || '')}" placeholder="Ej. Lira llega y detiene a Draven"></label>
     </div>
-    <div class="stchange"><div class="row nw" style="align-items:flex-start;gap:8px"><span style="font-size:20px;padding-top:6px">✏️</span><textarea id="stChange" rows="2" placeholder="¿Qué quieres cambiar de este capítulo? Ej. “Tomás no existe: que Elías esté solo en esa escena”, “que la pelea la gane Evangeline”, “más oscuro el final”"></textarea><button class="pri" data-a="stChangeRun" ${s.text.trim() || c.premise ? '' : 'disabled'}>Reescribir con el cambio</button></div><div class="tiny dim" style="margin:4px 0 0 30px">Reescribe todo el capítulo con tu cambio, sin contradecir tu biblia. Si el cambio es para toda la historia, usa la barra 🪄 de la Biblia o de Capítulos.</div></div>
+    <div class="stchange"><div class="row nw" style="align-items:flex-start;gap:8px"><span style="font-size:20px;padding-top:6px">✏️</span><textarea id="stChange" rows="2" placeholder="¿Qué quieres cambiar de este capítulo? Ej. “Tomás no existe: que Elías esté solo en esa escena”, “que la pelea la gane Evangeline”, “más oscuro el final”"></textarea>${jobBtn('change:' + c.id, 'Reescribir con el cambio', `class="pri" data-a="stChangeRun" ${s.text.trim() || c.premise ? '' : 'disabled'}`, 'Reescribiendo…')}</div><div class="tiny dim" style="margin:4px 0 0 30px">Reescribe todo el capítulo con tu cambio, sin contradecir tu biblia. Si el cambio es para toda la historia, usa la barra 🪄 de la Biblia o de Capítulos.</div></div>
     <div class="stfull row" style="margin:6px 0 10px">
       <span class="small"><b>Dos formas:</b></span>
-      <button class="pri" data-a="stFull">📝 Escribir el capítulo COMPLETO</button>
+      ${jobBtn('full:' + c.id, '📝 Escribir el capítulo COMPLETO', 'class="pri" data-a="stFull"', 'Escribiendo capítulo…')}
       <select id="stLen" style="width:auto">${[['corto', 'Corto (~1,500 palabras)'], ['normal', 'Normal (~3,000 palabras)'], ['largo', 'Largo (~5,000 palabras)']].map(([v, l]) => `<option value="${v}" ${(s.len || 'normal') === v ? 'selected' : ''}>${l}</option>`).join('')}</select>
       <span class="small muted">o escribe junto con Claude párrafo por párrafo con ✨ Continuar (abajo).</span>
     </div>
@@ -5238,8 +5280,8 @@ ${brain(m, { skipChapterId: c.id, maxChars: 30000 })}
 
 CAPÍTULO ${c.number}${c.title ? ' "' + c.title + '"' : ''}${c.premise ? '\nIdea del capítulo: ' + c.premise : ''}
 ${story(c).note ? 'NOTA DEL AUTOR (estilo y tono, obedécela): ' + story(c).note : ''}`;
-async function stCall(m, c, el, prompt, title, max = 2500) {
-  let out; await busy(el, async () => { const { text } = await ai(prompt, { max_tokens: max, temperature: 0.9, estOut: Math.round(max * 0.5), title }); out = text; }, 'Claude escribiendo…');
+async function stCall(m, c, el, prompt, title, max = 2500, job = null) {
+  let out; await busy(el, async () => { const { text } = await ai(prompt, { max_tokens: max, temperature: 0.9, estOut: Math.round(max * 0.5), title, job }); out = text; }, 'Claude escribiendo…');
   return out;
 }
 const cleanGen = t => String(t || '').replace(/^```[a-z]*\n?|```$/gim, '').replace(/^(claro|aquí|perfecto)[^\n]*\n+/i, '').trim();
@@ -5392,14 +5434,20 @@ ${prevChapterTail(m, c)}
 ${finish ? `\nTEXTO DEL AUTOR HASTA AHORA (sigue su estilo exacto):\n"""\n${s.text.slice(-15000)}\n"""` : ''}
 
 Responde SOLO con el texto del capítulo, sin título, sin comentarios y sin notas.`;
-  const out = cleanGen(await stCall(m, c, el, prompt, finish ? `Terminar Cap ${c.number}` : `Escribir Cap ${c.number} completo`, Math.min(32000, Math.round(words * 2.6) + 1500)));
+  const key = 'full:' + c.id; if (jobRunning(key)) return toast('Ya estoy escribiendo este capítulo ⏳');
+  const out = cleanGen(await stCall(m, c, el, prompt, finish ? `Terminar Cap ${c.number}` : `Escribir Cap ${c.number} completo`, Math.min(32000, Math.round(words * 2.6) + 1500), { key, kind: 'stFull', meta: { mid: m.id, cid: c.id, finish }, link: mlink(m, 'cap', c.id) }));
   if (!out) return;
+  applyFull(m, c, out, finish);
+};
+function applyFull(m, c, out, finish) {
+  const s = story(c);
   stSnap(c);
   if (finish) { const sep = /\n$/.test(s.text) ? '\n' : '\n\n'; const start = s.text.length + sep.length; s.text += sep + out; s.last = { start, end: s.text.length }; }
   else { s.text = out; s.last = { start: 0, end: out.length }; }
   s.focus = true; touch(m); render();
   toast(`📝 Capítulo ${finish ? 'terminado' : 'escrito'}: ${out.split(/\s+/).length.toLocaleString('es')} palabras. Edítalo, pídele cambios, o conviértelo en guion.`, 'ok');
-};
+}
+JOB_DONE.stFull = (m, meta, text) => { const c = chapterById(m, meta.cid); const out = cleanGen(text); if (c && out) applyFull(m, c, out, meta.finish); };
 
 /* ✏️ reescribir el capítulo completo con un cambio */
 ACT.stChangeRun = async el => {
@@ -5426,12 +5474,18 @@ ${base.slice(0, 60000)}
 """
 
 Responde SOLO con el capítulo completo reescrito, sin título y sin comentarios.`;
-  const out = cleanGen(await stCall(m, c, el, prompt, `Reescribir Cap ${c.number} con un cambio`, Math.min(32000, Math.round(words * 2.6) + 1500)));
+  const key = 'change:' + c.id; if (jobRunning(key)) return toast('Ya estoy reescribiendo este capítulo ⏳');
+  const out = cleanGen(await stCall(m, c, el, prompt, `Reescribir Cap ${c.number} con un cambio`, Math.min(32000, Math.round(words * 2.6) + 1500), { key, kind: 'stChange', meta: { mid: m.id, cid: c.id, ch }, link: mlink(m, 'cap', c.id) }));
   if (!out) return;
+  applyChange(m, c, out, ch);
+};
+function applyChange(m, c, out, ch) {
+  const s = story(c);
   stSnap(c); s.text = out; s.last = { start: 0, end: out.length }; s.focus = true; (c.changes ||= []).unshift({ at: Date.now(), text: ch });
   const hasPanels = (c.panels || []).length; touch(m); render(); const t = $('#stChange'); if (t) t.value = '';
   toast(`✏️ Capítulo reescrito con tu cambio.${hasPanels ? ' Tu guion de paneles es de antes: toca “🎞️ Convertir en guion de paneles” para rehacerlo con este texto.' : ''} ↩️ Deshacer si no te gusta.`, 'ok');
-};
+}
+JOB_DONE.stChange = (m, meta, text) => { const c = chapterById(m, meta.cid); const out = cleanGen(text); if (c && out) applyChange(m, c, out, meta.ch); };
 
 /* ir exactamente al lugar del capítulo */
 function taScrollTo(t, a, b) {
@@ -5988,6 +6042,64 @@ function docApply(m, it) {
     if (isHead(it.after.trim()) && lineEnd >= 0) { let k = lineEnd; const nextHead = M.text.slice(lineEnd + 1).split('\n').findIndex(l => isHead(l.trim())); if (nextHead >= 0) { const lines = M.text.slice(lineEnd + 1).split('\n').slice(0, nextHead); k = lineEnd + 1 + lines.join('\n').length; } else k = M.text.length; M.text = M.text.slice(0, k).replace(/\s*$/, '') + '\n\n' + add + '\n' + M.text.slice(k).replace(/^\n*/, '\n'); return true; }
     if (end < 0) end = M.text.length; M.text = M.text.slice(0, end) + '\n' + add + M.text.slice(end); return true; }
   return false;
+}
+
+/* =====================================================================
+   ⏳ TRABAJOS EN CURSO
+   - Barra fija arriba con lo que Claude está haciendo y un reloj,
+     aunque te muevas de página.
+   - Con el puente nuevo, el trabajo vive en tu computadora: si recargas
+     o cierras la app, al volver a abrirla recoge el resultado y lo guarda.
+   - Modo rápido (Claude Sonnet) para guiones y textos largos.
+   ===================================================================== */
+const JOBUI = new Map(); let jobTick = null;
+const ccModel = () => (S.settings.ccSpeed === 'rapido' ? 'sonnet' : undefined);
+function jobStart(key, title) { const id = key || uid('j_'); JOBUI.set(id, { title: title || 'Trabajando', start: Date.now(), state: 'run' }); jobRender(); return id; }
+function jobEnd(id, ok = true, link = null) { const j = JOBUI.get(id); if (!j) return; j.state = ok ? 'ok' : 'err'; j.end = Date.now(); j.link = link; jobRender(); setTimeout(() => { if (JOBUI.get(id) === j) { JOBUI.delete(id); jobRender(); } }, ok ? 12000 : 8000); }
+const jobRunning = key => JOBUI.get(key)?.state === 'run';
+const mmss = ms => { const s = Math.round(ms / 1000); return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); };
+function jobRender() {
+  let bar = document.getElementById('jobbar'); if (!bar) { bar = document.createElement('div'); bar.id = 'jobbar'; document.body.appendChild(bar); }
+  const js = [...JOBUI.entries()];
+  bar.innerHTML = js.map(([id, j]) => `<div class="jobrow ${j.state}">${j.state === 'run' ? '<span class="spin"></span>' : j.state === 'ok' ? '✔' : '✕'} <span class="grow">${esc(j.title)}</span><b>${mmss((j.end || Date.now()) - j.start)}</b>${j.state === 'ok' && j.link ? `<a data-a="go" data-to="${j.link}">Ver →</a>` : ''}${j.state === 'run' && S.settings.ccSpeed !== 'rapido' && usingCC() && Date.now() - j.start > 60000 ? `<a data-a="ccFast" title="Los siguientes trabajos se harán con Claude Sonnet, más rápido">⚡ ¿lento? modo rápido</a>` : ''}</div>`).join('');
+  bar.style.display = js.length ? 'block' : 'none';
+  if (js.some(([, j]) => j.state === 'run')) { if (!jobTick) jobTick = setInterval(() => { jobRender(); $$('[data-jobkey]').forEach(b => { const j = JOBUI.get(b.dataset.jobkey); if (j?.state === 'run') { const t = b.querySelector('.jt'); if (t) t.textContent = mmss(Date.now() - j.start); } }); }, 1000); }
+  else { clearInterval(jobTick); jobTick = null; }
+}
+ACT.ccFast = () => { S.settings.ccSpeed = 'rapido'; saveSettings(); jobRender(); toast('⚡ Modo rápido activado: los siguientes trabajos usan Claude Sonnet (lo cambias en Configuración)', 'ok'); };
+/* un botón que muestra si su trabajo sigue corriendo (aunque hayas cambiado de página) */
+function jobBtn(key, html, attrs, runLabel) { const j = JOBUI.get(key); if (j?.state === 'run') return `<button ${attrs} disabled data-jobkey="${esc(key)}"><span class="spin"></span> ${esc(runLabel)} <span class="jt">${mmss(Date.now() - j.start)}</span></button>`; return `<button ${attrs}>${html}</button>`; }
+
+/* ---------- trabajos que sobreviven a recargar la app ---------- */
+const PEND_KEY = 'mms_jobs';
+const pendList = () => { try { return JSON.parse(localStorage.getItem(PEND_KEY) || '[]'); } catch (e) { return []; } };
+const pendSave = l => { try { localStorage.setItem(PEND_KEY, JSON.stringify(l)); } catch (e) { } };
+async function ccJob(prompt, title, job) {
+  const r = await ccFetch('/job', { method: 'POST', body: JSON.stringify({ prompt, title, model: ccModel() }) }, 15000);
+  const rec = { id: r.id, title, kind: job?.kind || null, meta: job?.meta || null, key: job?.key || null, at: Date.now() };
+  if (job?.kind) pendSave([...pendList(), rec]);
+  try { return await ccWait(rec); } finally { if (job?.kind) pendSave(pendList().filter(x => x.id !== rec.id)); }
+}
+async function ccWait(rec) {
+  for (;;) {
+    await new Promise(r => setTimeout(r, 2500));
+    let st; try { st = await ccFetch('/job?id=' + encodeURIComponent(rec.id), {}, 8000); } catch (e) { if (/404|No encontré/.test(e.message)) throw new Error('El puente ya no tiene ese trabajo'); continue; }
+    if (st.status === 'done') return st.text || '';
+    if (st.status === 'error') throw new Error(st.error || 'Claude Code no pudo terminar');
+    if (Date.now() - rec.at > 30 * 60 * 1000) throw new Error('Claude Code tardó demasiado');
+  }
+}
+/* al abrir la app: recoger lo que terminó mientras no estabas */
+let resumed = false;
+async function jobsResume() {
+  if (resumed || !usingCC() || !CC.info?.jobs) return; resumed = true;
+  for (const rec of pendList()) {
+    const m = S.manhwas[rec.meta?.mid]; if (!m || !JOB_DONE[rec.kind]) { pendSave(pendList().filter(x => x.id !== rec.id)); continue; }
+    const key = jobStart(rec.key, rec.title + ' (recuperando)');
+    ccWait(rec).then(text => { JOB_DONE[rec.kind](m, rec.meta, text); jobEnd(key, true, rec.meta?.cid ? mlink(m, 'cap', rec.meta.cid) : null); toast('✔ Terminó mientras no estabas: ' + rec.title, 'ok'); })
+      .catch(e => { jobEnd(key, false); toast(rec.title + ': ' + e.message, 'err'); })
+      .finally(() => pendSave(pendList().filter(x => x.id !== rec.id)));
+  }
 }
 
 </script>

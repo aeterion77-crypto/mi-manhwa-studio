@@ -341,3 +341,8 @@ input[type=radio],input[type=checkbox]{width:20px;min-height:20px;height:20px;fl
 .fixgo{cursor:pointer;border-radius:8px;padding:2px 4px;margin:-2px -4px}
 .fixgo:hover{background:rgba(255,255,255,.06)}
 .fixgo.on{outline:2px solid var(--neon)}
+
+#jobbar{position:fixed;top:72px;right:18px;z-index:900;display:none;min-width:280px;max-width:420px}
+.jobrow{display:flex;gap:8px;align-items:center;background:#1d1a24;border:1px solid var(--neon);border-radius:12px;padding:8px 12px;margin-bottom:6px;box-shadow:0 6px 24px rgba(0,0,0,.4);font-size:14px}
+.jobrow.ok{border-color:var(--ok)}.jobrow.err{border-color:#e55}.jobrow a{cursor:pointer;color:var(--neon);white-space:nowrap;font-size:13px}
+@media(max-width:700px){#jobbar{top:auto;bottom:12px;left:12px;right:12px;max-width:none}}

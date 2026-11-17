@@ -504,20 +504,24 @@ function premiumAI(prompt, title) {
     bg.querySelector('[data-x=ok]').onclick = () => { const t = bg.querySelector('#pans').value.trim(); if (!t) return toast('Pega la respuesta de Claude', 'err'); bg.remove(); res({ text: t, stop: 'end_turn' }); };
   });
 }
-async function ai(prompt, { system = '', max_tokens = 4000, temperature = 0.8, estOut, confirmed = false, title = '' } = {}) {
+const JOB_DONE = {}; // qué hacer con un trabajo que terminó mientras la app estaba cerrada
+async function ai(prompt, { system = '', max_tokens = 4000, temperature = 0.8, estOut, confirmed = false, title = '', job = null } = {}) {
   const full = (system ? system + '\n\n' : '') + prompt;
   // 1) Claude Code conectado: automático y con tu plan (sin llave, sin copiar/pegar)
   if (typeof CC !== 'undefined' && CC.ok && CC.info?.ask) {
-    const tt = toast('🔌 Tu Claude Code está trabajando' + (title ? ': ' + title : '') + '… (puede tardar un par de minutos)');
-    try { const r = await ccFetch('/ask', { method: 'POST', body: JSON.stringify({ prompt: full, title }) }, 16 * 60 * 1000); return { text: r.text || '', stop: 'end_turn' }; }
-    catch (e) { toast('Claude Code no respondió (' + e.message + '). Uso el otro modo.', 'err'); }
+    const jk = jobStart(job?.key, '🔌 ' + (title || 'Claude Code trabajando'));
+    try {
+      const text = CC.info.jobs ? await ccJob(full, title, job) : (await ccFetch('/ask', { method: 'POST', body: JSON.stringify({ prompt: full, title, model: ccModel() }) }, 31 * 60 * 1000)).text;
+      jobEnd(jk, true, job?.link); return { text: text || '', stop: 'end_turn' };
+    } catch (e) { jobEnd(jk, false); toast('Claude Code no respondió (' + e.message + '). Uso el otro modo.', 'err'); }
   } else if (typeof CC !== 'undefined' && CC.ok && !CC.info?.ask) toast('Actualiza tu puente de Claude Code para que haga esto solo (te mandé el archivo nuevo).');
   if (isPremium()) return premiumAI(full, title);
   if (!confirmed) {
     const line = aiLine(full.length, estOut ?? Math.round(max_tokens * 0.4), max_tokens, title || 'Texto con Claude');
     if (!await confirmCost(title || 'Usar Claude', [line])) throw new Error('Cancelado');
   }
-  const r = await callFn('ai', { model: S.settings.model || DEFAULT_MODEL, max_tokens, temperature, system, messages: [{ role: 'user', content: prompt }] });
+  const jk2 = jobStart(job?.key, title || 'Claude escribiendo'); let r;
+  try { r = await callFn('ai', { model: S.settings.model || DEFAULT_MODEL, max_tokens, temperature, system, messages: [{ role: 'user', content: prompt }] }); jobEnd(jk2, true, job?.link); } catch (e) { jobEnd(jk2, false); throw e; }
   if (r.usage) { const M = CLAUDE_MODELS[r.model] || CLAUDE_MODELS[S.settings.model] || CLAUDE_MODELS[DEFAULT_MODEL]; addSpend((r.usage.input_tokens * M.in + r.usage.output_tokens * M.out) / 1e6); }
   return { text: r.text || '', stop: r.stop_reason };
 }

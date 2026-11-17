@@ -80,7 +80,7 @@ VIEWS.cap = () => {
         <label class="f">Describe el capítulo<textarea ${bindAttr(c, 'premise')} placeholder="Ej. Cap 12, pelea en la azotea entre Kael y Draven bajo la lluvia. Lira llega al final.">${esc(c.premise)}</textarea></label>
         <div class="grid2"><label class="f">Director de paneles<select ${bindAttr(c, 'tone')}>${[['auto', 'Automático'], ['pelea', 'Pelea (chico, chico, ¡GRANDE!)'], ['drama', 'Drama (grandes y lentos)'], ['romance', 'Romance'], ['misterio', 'Misterio / terror'], ['comedia', 'Comedia']].map(([v, l]) => `<option value="${v}" ${c.tone === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
         <label class="f">Paneles<input id="npan" type="number" min="5" max="60" value="${c.panelTarget || 30}"></label></div>
-        <div class="row"><button class="pri big" data-a="writeScript">✨ Escribir guion (${c.panelTarget || 30} paneles)</button><button data-a="pasteScript">📋 Ya lo tengo: pegar mi guion</button>${c.panels.length ? '<button data-a="applyDirector">🎬 Aplicar director</button>' : ''}</div>
+        <div class="row">${jobBtn('script:' + c.id, `✨ Escribir guion (${c.panelTarget || 30} paneles)`, 'class="pri big" data-a="writeScript"', 'Escribiendo guion…')}<button data-a="pasteScript">📋 Ya lo tengo: pegar mi guion</button>${c.panels.length ? '<button data-a="applyDirector">🎬 Aplicar director</button>' : ''}</div>
         <p class="tiny dim">Usa el cerebro completo: personajes, LoRAs, trigger words, fichas canon y capítulos anteriores.${c.story?.text?.trim() ? ' <b>Además usa lo que escribiste en “✍️ Escribir con Claude”.</b>' : ''}</p>
       </div>
       <div class="col">
@@ -189,8 +189,13 @@ FORMATO: una línea JSON por objeto, sin nada más (JSONL):
 {"t":"panel","size":"S|M|L|XL","shot":"plano (primer plano, plano medio, plano general, picado, contrapicado…)","description":"qué se ve, en español","characters":["Nombre exacto"],"dialogues":[{"who":"Nombre o Narración","type":"normal|grito|pensamiento|narracion|susurro","text":"…"}],"sfx":["BOOM"],"prompt_en":"visual scene description in English for an image model: action, pose, expression, setting, lighting, camera angle (no character names, no text)"}
 … (${n} líneas de panel) …
 {"t":"cliff","title":"…","description":"opción de final para enganchar"}  (3 líneas cliff)`;
+  const key = 'script:' + c.id; if (jobRunning(key)) return toast('Ya estoy escribiendo este guion ⏳ (mira la barra de arriba)');
   await busy(el, async () => {
-    const { text, stop } = await ai(prompt, { max_tokens: 16000, temperature: 0.85, estOut: n * 260 + 400, title: `Escribir guion de ${n} paneles` });
+    const { text, stop } = await ai(prompt, { max_tokens: 16000, temperature: 0.85, estOut: n * 260 + 400, title: `Guion Cap ${c.number} · ${n} paneles`, job: { key, kind: 'script', meta: { mid: m.id, cid: c.id }, link: mlink(m, 'cap', c.id) } });
+    applyScriptText(m, c, text, stop);
+  }, 'Escribiendo guion…');
+};
+function applyScriptText(m, c, text, stop) {
     const rows = parseJSONL(text);
     const panels = rows.filter(r => r.t === 'panel');
     if (!panels.length) throw new Error('La IA no devolvió paneles. Intenta de nuevo.');
@@ -204,8 +209,8 @@ FORMATO: una línea JSON por objeto, sin nada más (JSONL):
     touch(m); render();
     toast(`Guion listo: ${c.panels.length} paneles ✨ Revisa, edita y aprueba los que pasen a Fal.ai.${stop === 'max_tokens' ? ' (se cortó al final, añade los que falten)' : ''}`, 'ok');
     const dead = localDeadCheck(m, c); if (dead.length) toast('⚠ ' + dead[0], 'err');
-  }, 'Escribiendo guion…');
-};
+}
+JOB_DONE.script = (m, meta, text) => { const c = chapterById(m, meta.cid); if (c) applyScriptText(m, c, text, 'end_turn'); };
 ACT.genCliff = async el => {
   const m = cur(); const c = chapterById(m, Route.a);
   await busy(el, async () => {

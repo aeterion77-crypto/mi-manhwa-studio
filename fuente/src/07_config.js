@@ -32,6 +32,9 @@ VIEWS.config = () => {
       <div class="panelbox"><h2>🤖 IA de texto (Claude)</h2>
         <label class="row nw res" style="cursor:pointer"><input type="radio" name="aimode" value="premium" ${isPremium() ? 'checked' : ''} data-change="setAiMode"><div><b>Claude Premium (tu plan actual) · $0 extra</b><div class="small muted">La app te prepara las instrucciones, las pegas en Claude y pegas la respuesta. Usa el mismo Claude que ya pagas.</div></div></label>
         <label class="row nw res" style="cursor:pointer"><input type="radio" name="aimode" value="api" ${!isPremium() ? 'checked' : ''} data-change="setAiMode"><div><b>Automático con API key · cobro por uso</b><div class="small muted">Todo se hace solo con un clic. Antes de cada uso te digo el precio y confirmas.</div></div></label>
+        <div style="margin-top:10px"><b>🔌 Velocidad de tu Claude Code</b>
+          <label class="row nw res" style="cursor:pointer"><input type="radio" name="ccspeed" value="calidad" ${st.ccSpeed !== 'rapido' ? 'checked' : ''} data-change="setCcSpeed"><div><b>💎 Mejor calidad</b><div class="small muted">Usa el modelo más potente de tu plan. Un guion de 30 paneles puede tardar 3 a 8 minutos.</div></div></label>
+          <label class="row nw res" style="cursor:pointer"><input type="radio" name="ccspeed" value="rapido" ${st.ccSpeed === 'rapido' ? 'checked' : ''} data-change="setCcSpeed"><div><b>⚡ Más rápido</b><div class="small muted">Usa Claude Sonnet: más o menos el doble de rápido, muy buena calidad. También es gratis con tu plan.</div></div></label></div>
         ${!isPremium() ? `<label class="f">Modelo<select ${bindAttr(st, 'model')} data-onchange="saveSetR">${Object.entries(CLAUDE_MODELS).map(([k, v]) => `<option value="${k}" ${st.model === k ? 'selected' : ''}>${v.label} — $${v.in} entrada / $${v.out} salida por millón de tokens</option>`).join('')}</select></label>
           <div class="tiny dim">Ejemplo: un guion de 30 paneles con ${(CLAUDE_MODELS[st.model] || {}).label || st.model} cuesta ≈ ${money(costAI(45000, 8200, 16000).cost)}.</div>` : ''}
       </div>
@@ -61,6 +64,7 @@ AFTER.config = async () => {
   try { const e = await navigator.storage.estimate(); const el = $('#stor'); if (el) el.textContent = `Espacio usado en este dispositivo: ${(e.usage / 1e6).toFixed(1)} MB. Nube gratis de Supabase: 1 GB de imágenes y 500 MB de datos.`; } catch (e) { }
 };
 ACT.saveSet = () => saveSettings();
+ACT.setCcSpeed = el => { S.settings.ccSpeed = el.value; saveSettings(); toast(el.value === 'rapido' ? '⚡ Modo rápido (Sonnet)' : '💎 Mejor calidad'); };
 ACT.setAiMode = el => { S.settings.aiMode = el.value; saveSettings(); render(); toast(el.value === 'premium' ? 'Usando tu Claude Premium (copiar y pegar, $0 extra)' : 'Modo automático con API: te mostraré el precio antes de cada uso'); };
 ACT.updPrices = el => busy(el, async () => { await refreshFalPrices(); render(); toast('Precios actualizados', 'ok'); }, 'Consultando…');
 ACT.saveSetR = () => { S.settings.modelChosen = true; saveSettings(); setTimeout(render, 50); };
