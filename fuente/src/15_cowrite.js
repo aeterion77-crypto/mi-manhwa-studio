@@ -35,7 +35,7 @@ function coWriteHTML(m, c) {
       <button data-a="stAsk">💬 Pregúntale a Claude</button>
     </div>
     ${s.answer ? `<div class="alert info" style="margin-top:10px"><div class="grow"><b>Claude:</b> ${esc(s.answer).replace(/\n/g, '<br>')}</div><button class="sm icon ghost" data-a="stAnsClose">✕</button></div>` : ''}
-    ${s.fixes.length ? `<div class="sect" style="margin-top:10px"><h3 style="margin:0 0 6px">🩹 Correcciones de Claude (${s.fixes.length})</h3>${s.fixes.map((f, i) => `<div class="alert warn" style="margin-bottom:6px"><div class="grow"><div class="small"><s style="opacity:.7">${esc(f.original)}</s></div><div class="small"><b>→ ${esc(f.fix)}</b></div>${f.why ? `<div class="tiny dim">${esc(f.why)}</div>` : ''}</div><div class="col" style="gap:4px"><button class="sm ok" data-a="stFixApply" data-i="${i}">Aplicar</button><button class="sm ghost" data-a="stFixSkip" data-i="${i}">Ignorar</button></div></div>`).join('')}<div class="row"><button class="sm ok" data-a="stFixAll">Aplicar todas</button><button class="sm" data-a="acceptAll" title="Lo que dejes se toma como correcto: no cambio tu texto y actualizo tu biblia y todo">✔ Así lo quiero (todas)</button><button class="sm ghost" data-a="stFixClear">Ignorar todas</button></div></div>` : ''}
+    ${s.fixes.length ? `<div class="sect" style="margin-top:10px"><h3 style="margin:0 0 6px">🩹 Correcciones de Claude (${s.fixes.length}) <span class="tiny dim" style="font-weight:400">· toca una para ir a ese lugar de tu capítulo</span></h3>${s.fixes.map((f, i) => `<div class="alert warn" style="margin-bottom:6px"><div class="grow fixgo" data-a="stFixGo" data-i="${i}" title="Ver dónde está en tu capítulo"><div class="small"><s style="opacity:.7">${esc(f.original)}</s></div><div class="small"><b>→ ${esc(f.fix)}</b></div>${f.why ? `<div class="tiny dim">${esc(f.why)}</div>` : ''}</div><div class="col" style="gap:4px"><button class="sm ok" data-a="stFixApply" data-i="${i}">Aplicar</button><button class="sm ghost" data-a="stFixSkip" data-i="${i}">Ignorar</button></div></div>`).join('')}<div class="row"><button class="sm ok" data-a="stFixAll">Aplicar todas</button><button class="sm" data-a="acceptAll" title="Lo que dejes se toma como correcto: no cambio tu texto y actualizo tu biblia y todo">✔ Así lo quiero (todas)</button><button class="sm ghost" data-a="stFixClear">Ignorar todas</button></div></div>` : ''}
     <div class="row" style="margin-top:12px;border-top:1px solid var(--line);padding-top:12px">
       <button class="ok" data-a="stToScript" ${words ? '' : 'disabled'}>🎞️ Convertir en guion de paneles</button>
       <button data-a="stToNovel" ${words ? '' : 'disabled'}>🎧 Guardar como versión novela</button>
@@ -252,3 +252,22 @@ Responde SOLO con el capítulo completo reescrito, sin título y sin comentarios
   const hasPanels = (c.panels || []).length; touch(m); render(); const t = $('#stChange'); if (t) t.value = '';
   toast(`✏️ Capítulo reescrito con tu cambio.${hasPanels ? ' Tu guion de paneles es de antes: toca “🎞️ Convertir en guion de paneles” para rehacerlo con este texto.' : ''} ↩️ Deshacer si no te gusta.`, 'ok');
 };
+
+/* ir exactamente al lugar del capítulo */
+function taScrollTo(t, a, b) {
+  const cs = getComputedStyle(t); const mir = document.createElement('div');
+  for (const k of ['fontFamily', 'fontSize', 'fontWeight', 'lineHeight', 'letterSpacing', 'padding', 'border', 'boxSizing', 'whiteSpace', 'wordWrap', 'overflowWrap']) mir.style[k] = cs[k];
+  mir.style.cssText += `;position:absolute;visibility:hidden;white-space:pre-wrap;word-wrap:break-word;width:${t.clientWidth}px;left:-9999px;top:0`;
+  mir.textContent = t.value.slice(0, a); const mark = document.createElement('span'); mark.textContent = t.value.slice(a, b) || '.'; mir.appendChild(mark); document.body.appendChild(mir);
+  const y = mark.offsetTop; mir.remove();
+  t.scrollTop = Math.max(0, y - t.clientHeight / 3);
+  const r = t.getBoundingClientRect(); window.scrollTo({ top: window.scrollY + r.top - 90, behavior: 'smooth' });
+  t.focus({ preventScroll: true }); t.setSelectionRange(a, b);
+  t.classList.add('flash'); setTimeout(() => t.classList.remove('flash'), 1500);
+}
+function findLoose(text, piece) { let i = text.indexOf(piece); if (i >= 0) return [i, i + piece.length]; const n = s => s.toLowerCase().replace(/\s+/g, ' '); const k = piece.trim().split(/\s+/).slice(0, 6).join(' '); i = text.toLowerCase().indexOf(k.toLowerCase()); return i >= 0 ? [i, i + Math.max(k.length, piece.length)] : null; }
+ACT.stFixGo = el => { const m = cur(); const c = chapterById(m, Route.a); const t = $('#stTxt'); const f = story(c).fixes[+el.dataset.i]; if (!t || !f) return; const pos = findLoose(t.value, f.original); if (!pos) return toast('Ya no encuentro ese texto (quizá lo cambiaste)', 'err'); $$('.fixgo.on').forEach(x => x.classList.remove('on')); el.classList.add('on'); taScrollTo(t, pos[0], pos[1]); };
+ACT.warnGo = el => { const m = cur(); const c = chapterById(m, Route.a); const n = +el.dataset.panel; const p = c.panels[n - 1]; const card = p && document.getElementById('pc_' + p.id);
+  if (card) { card.scrollIntoView({ behavior: 'smooth', block: 'center' }); card.classList.add('flash'); setTimeout(() => card.classList.remove('flash'), 1800); return; }
+  const t = $('#stTxt'); const q = el.dataset.q; if (t && q) { const pos = findLoose(t.value, q); if (pos) return taScrollTo(t, pos[0], pos[1]); }
+  toast('No encontré dónde está', 'err'); };

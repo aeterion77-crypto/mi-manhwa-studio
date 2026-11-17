@@ -86,7 +86,7 @@ VIEWS.cap = () => {
       <div class="col">
         <div class="panelbox"><h2>🛡️ Continuidad</h2>
           ${dead.map(x => `<div class="alert bad"><div class="grow">☠️ ${esc(x)}</div><button class="sm icon ghost" data-a="deadIgnore" data-msg="${esc(x)}" title="Ignorar">✕</button></div>`).join('')}
-          ${w.length ? w.map((x, i) => `<div class="alert ${x.severity === 'alta' ? 'bad' : 'warn'}"><div class="grow"><b>${esc(x.type || 'Aviso')}${x.panel ? ' · Panel ' + x.panel : ''}:</b> ${esc(x.message)}${x.suggestion ? `<div class="small" style="opacity:.85;margin-top:4px">💡 ${esc(x.suggestion)}</div>` : ''}</div><button class="sm icon ghost" data-a="dismissWarn" data-i="${i}">✕</button></div>`).join('') : (dead.length ? '' : '<p class="muted small">Sin avisos. Revisa la continuidad cuando tengas el guion.</p>')}
+          ${w.length ? w.map((x, i) => `<div class="alert ${x.severity === 'alta' ? 'bad' : 'warn'}"><div class="grow ${x.panel || x.quote ? 'fixgo' : ''}" ${x.panel || x.quote ? `data-a="warnGo" data-panel="${x.panel || ''}" data-q="${esc(x.quote || '')}" title="Ir a ese lugar"` : ''}><b>${esc(x.type || 'Aviso')}${x.panel ? ' · Panel ' + x.panel : ''}:</b> ${esc(x.message)}${x.suggestion ? `<div class="small" style="opacity:.85;margin-top:4px">💡 ${esc(x.suggestion)}</div>` : ''}</div><button class="sm icon ghost" data-a="dismissWarn" data-i="${i}">✕</button></div>`).join('') : (dead.length ? '' : '<p class="muted small">Sin avisos. Revisa la continuidad cuando tengas el guion.</p>')}
           <div class="row"><button data-a="checkCont">🔍 Revisar continuidad</button>${w.length || dead.length ? `<button class="ok" data-a="acceptAll" title="Los avisos que dejes (ignora con ✕ los que sí son error) se toman como correctos y se actualiza tu biblia y todo">✔ Así lo quiero (${w.length + dead.length})</button>` : ''}<button class="pri" data-a="capToBible">📜 Actualizar mi biblia con este capítulo</button><button class="ok" data-a="finishCap">✅ Terminar capítulo</button></div>
           <p class="tiny dim">“Terminar capítulo” detecta nuevos hechos y te los propone. Tú das CONSERVAR.</p>
         </div>
@@ -248,7 +248,7 @@ Busca SOLO problemas reales:
 1. Continuidad: contradicciones con fichas canon (cicatriz de lado distinto, color de ojos, objetos, lugares), personajes muertos que aparecen vivos sin explicación, reglas del mundo rotas.
 2. Personajes: cambios de emoción o personalidad sin motivo respecto a capítulos anteriores (ej. estaba furioso y de repente feliz), habla fuera de personaje.
 3. Repetición: escenas o tramas que ya se contaron en capítulos anteriores.
-Formato: [{"type":"Continuidad|Personaje|Repetición","severity":"alta|media","panel":número o null,"message":"explicación clara y corta","suggestion":"cómo arreglarlo"}]. Si no hay problemas devuelve [].`, { max_tokens: 3000, temperature: 0.2, estOut: 800, title: 'Revisar continuidad' });
+Formato: [{"type":"Continuidad|Personaje|Repetición","severity":"alta|media","panel":número o null,"quote":"frase EXACTA copiada del guion donde está el problema","message":"explicación clara y corta","suggestion":"cómo arreglarlo"}]. Si no hay problemas devuelve [].`, { max_tokens: 3000, temperature: 0.2, estOut: 800, title: 'Revisar continuidad' });
     c.warnings = Array.isArray(r) ? r : (r.warnings || []); touch(m); render();
     toast(c.warnings.length ? `Encontré ${c.warnings.length} posible(s) problema(s)` : 'Todo en orden ✔', c.warnings.length ? '' : 'ok');
   }, 'Revisando…');
