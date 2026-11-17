@@ -94,6 +94,7 @@ Operaciones posibles:
 - {"op":"new","type":"capitulo","data":{"number":número,"title":"","premise":"qué pasa"},"why":""}  → capítulo nuevo
 - {"op":"doc_replace","find":"texto EXACTO del documento base","replace":"texto nuevo","why":""}  → cambiar algo en el documento de la biblia
 - {"op":"doc_insert","after":"texto EXACTO del documento (ej. el título de la parte)","text":"lo nuevo","why":""}  → agregar algo al documento de la biblia en su lugar
+- {"op":"delete","path":"ent.<id> | canon.<id> | sec.<id>","why":""}  → QUITAR por completo una ficha (personaje, lugar, poder, evento…), una ficha canon o una sección. Si quitas un personaje, además reescribe con "replace"/"set" las partes de la historia, capítulos, eventos y diálogos donde aparecía para que todo siga teniendo sentido sin él (y quítalo del documento de la biblia).
 - {"path":"dirección","op":"append","text":"texto a AGREGAR al final de ese campo","why":""}  → para añadir información a algo que ya existe sin borrar lo que tenía
 
 Para llenar un campo VACÍO de una ficha que ya existe usa la dirección ent.<id>.<campo> con "set" (el id lo ves en las otras direcciones de esa ficha).
@@ -129,6 +130,13 @@ function gxReview(m, q, r, opts = {}) {
       const summ = T.fields.filter(([k]) => k !== 'name' && d[k]).map(([k, l]) => `${l}: ${d[k]}`).join('\n');
       items.push({ ...x, label: ex ? `${T.icon} Completar ficha de ${ex.name}` : `➕ ${T.icon} Nuevo ${T.one}: ${d.name}`, before: ex ? '(solo llena lo que esté vacío y agrega lo nuevo)' : '—', after: summ || d.name }); continue;
     }
+    if (x.op === 'delete' && x.path) {
+      const [kd, id] = x.path.split('.');
+      if (kd === 'ent') { const e = findEntity(m, id); if (!e) continue; const T = TYPES[findEntityType(m, id)]; const refs = gxFields(m).filter(f => !f.p.startsWith('ent.' + id + '.') && f.v.includes(e.name)).length; items.push({ ...x, label: `🗑️ Quitar ${T.one}: ${e.name}`, before: `${e.name}${e.role ? ' · ' + e.role : ''}`, after: `(se borra su ficha, sus relaciones y su nombre de los paneles)${refs ? ` · aún se menciona en ${refs} lugares` : ''}` }); continue; }
+      if (kd === 'canon') { const f = m.canon.find(c => c.id === id); if (f) items.push({ ...x, label: `🗑️ Quitar ficha canon`, before: `${f.entity} · ${f.attribute}: ${f.value}`, after: '(se borra)' }); continue; }
+      if (kd === 'sec') { const sx = (m.bible.sections || []).find(c => c.id === id); if (sx) items.push({ ...x, label: `🗑️ Quitar sección ${sx.icon} ${sx.title}`, before: sx.text.slice(0, 300), after: '(se borra)' }); continue; }
+      continue;
+    }
     if (x.op === 'canon' && x.entity && x.attribute) { items.push({ ...x, label: `📌 Nueva ficha canon: ${x.entity} · ${x.attribute}`, before: '—', after: x.value }); continue; }
     const f = gxFields(m).find(ff => ff.p === x.path) || gxEmpty(m, x.path); if (!f) continue;
     if (x.op === 'append') { if (!x.text) continue; items.push({ ...x, label: '➕ ' + f.l, before: f.v.length > 200 ? '…' + f.v.slice(-200) : f.v, after: (f.v.length > 200 ? '…' + f.v.slice(-120) : f.v) + '\n' + x.text }); continue; }
@@ -163,6 +171,16 @@ function gxReview(m, q, r, opts = {}) {
         if (ex) { for (const [k] of T.fields) if (d[k] != null && String(d[k]).trim() && k !== 'name') { const cv = String(ex[k] ?? '').trim(); if (!cv) ex[k] = String(d[k]); else if (!cv.includes(String(d[k]).trim())) ex[k] = cv + '\n' + d[k]; } }
         else { const e = { id: uid(T.key[0] + '_'), relations: [], createdAt: Date.now() }; for (const [k, , ty] of T.fields) if (d[k] != null && String(d[k]).trim()) e[k] = ty === 'num' ? Number(d[k]) || 0 : String(d[k]); if (it.type === 'historia') e.order = arr.length + 1; arr.push(e); }
         n++; continue;
+      }
+      if (it.op === 'delete') {
+        const [kd, id] = it.path.split('.');
+        if (kd === 'ent') { const t = findEntityType(m, id); const e = findEntity(m, id); if (!t || !e) continue; const T = TYPES[t]; m[T.key] = m[T.key].filter(x => x.id !== id);
+          for (const k of Object.keys(TYPES)) for (const o of m[TYPES[k].key] || []) if (o.relations) o.relations = o.relations.filter(r => r.target !== id);
+          for (const c of chapterList(m)) for (const p of c.panels || []) if ((p.characters || []).some(n2 => norm(n2) === norm(e.name))) { p.characters = p.characters.filter(n2 => norm(n2) !== norm(e.name)); p.approved = false; }
+          if (m.bible.protagonistId === id) m.bible.protagonistId = ''; n++; continue; }
+        if (kd === 'canon') { m.canon = m.canon.filter(x => x.id !== id); n++; continue; }
+        if (kd === 'sec') { m.bible.sections = (m.bible.sections || []).filter(x => x.id !== id); n++; continue; }
+        continue;
       }
       if (it.op === 'append') { const cv = gxGet(m, it.path); if (gxSet(m, it.path, cv ? cv + '\n' + it.text : it.text)) { n++; touched.add(it.path); } continue; }
       if (it.op === 'canon') { m.canon.push({ id: uid('k_'), entity: it.entity, attribute: it.attribute, value: it.value, since: '', note: 'Por cambio: ' + q.slice(0, 80) }); n++; continue; }
@@ -208,4 +226,12 @@ function gxEmpty(m, path) {
   if (kind === 'cap' && chapterById(m, a) && ['title', 'premise', 'summary'].includes(b)) return { p: path, l: `📖 Cap ${chapterById(m, a).number} · ${b}`, v: '' };
   if (kind === 'sec') { const sx = (m.bible.sections || []).find(x => x.id === a); if (sx) return { p: path, l: `${sx.icon} ${sx.title}`, v: '' }; }
   return null;
+}
+
+/* barra compacta para agregar / cambiar / quitar (en biblia, canon, secciones, capítulos) */
+function gxBar(m, ph = '') {
+  return `<div class="gxbar"><div class="row nw" style="align-items:flex-start;gap:8px"><span style="font-size:22px;padding-top:6px">🪄</span>
+    <textarea id="gxQ" rows="2" placeholder="${esc(ph || 'Agrega, cambia o quita lo que quieras y Claude lo acomoda en todos lados. Ej. “Tomás, el amigo de Elías, no existe: quítalo y arregla esa parte de la historia”')}"></textarea>
+    <div class="col" style="gap:6px"><button class="pri" data-a="gxRun">Hacerlo</button><button class="sm ghost" data-a="gxUndo" title="Deshacer el último cambio">↩️</button></div></div>
+    <div class="tiny dim" style="margin:4px 0 0 32px">Se escribe primero en 📜 tu biblia y de ahí se reparte a fichas, canon, historia, capítulos y paneles. Siempre te muestro todo antes de guardar.</div></div>`;
 }

@@ -17,6 +17,7 @@ function coWriteHTML(m, c) {
       <label class="f">📝 Nota para Claude (estilo y tono de este capítulo)<input ${bindAttr(s, 'note')} value="${esc(s.note)}" placeholder="Ej. narración en tercera persona, oscuro, frases cortas, mucho diálogo"></label>
       <label class="f">🎯 ¿Qué quieres que pase ahora? (opcional)<input id="stWant" value="${esc(s.want || '')}" placeholder="Ej. Lira llega y detiene a Draven"></label>
     </div>
+    <div class="stchange"><div class="row nw" style="align-items:flex-start;gap:8px"><span style="font-size:20px;padding-top:6px">✏️</span><textarea id="stChange" rows="2" placeholder="¿Qué quieres cambiar de este capítulo? Ej. “Tomás no existe: que Elías esté solo en esa escena”, “que la pelea la gane Evangeline”, “más oscuro el final”"></textarea><button class="pri" data-a="stChangeRun" ${s.text.trim() || c.premise ? '' : 'disabled'}>Reescribir con el cambio</button></div><div class="tiny dim" style="margin:4px 0 0 30px">Reescribe todo el capítulo con tu cambio, sin contradecir tu biblia. Si el cambio es para toda la historia, usa la barra 🪄 de la Biblia o de Capítulos.</div></div>
     <div class="stfull row" style="margin:6px 0 10px">
       <span class="small"><b>Dos formas:</b></span>
       <button class="pri" data-a="stFull">📝 Escribir el capítulo COMPLETO</button>
@@ -217,4 +218,36 @@ Responde SOLO con el texto del capítulo, sin título, sin comentarios y sin not
   else { s.text = out; s.last = { start: 0, end: out.length }; }
   s.focus = true; touch(m); render();
   toast(`📝 Capítulo ${finish ? 'terminado' : 'escrito'}: ${out.split(/\s+/).length.toLocaleString('es')} palabras. Edítalo, pídele cambios, o conviértelo en guion.`, 'ok');
+};
+
+/* ✏️ reescribir el capítulo completo con un cambio */
+ACT.stChangeRun = async el => {
+  const m = cur(); const c = chapterById(m, Route.a); stSync(m, c); const s = story(c);
+  const ch = ($('#stChange')?.value || '').trim(); if (ch.length < 3) return toast('Escribe qué quieres cambiar', 'err');
+  const base = s.text.trim();
+  if (!base) { c.premise = (c.premise ? c.premise + '\n' : '') + 'CAMBIO: ' + ch; touch(m); render(); return toast('Lo agregué a la idea del capítulo. Ahora toca “📝 Escribir el capítulo COMPLETO”.', 'ok'); }
+  const words = base.split(/\s+/).length;
+  const prompt = `Eres el escritor de este manhwa/novela. REESCRIBE el Capítulo ${c.number} completo aplicando este CAMBIO del autor:
+«${ch}»
+
+Reglas:
+- Aplica el cambio en TODO el capítulo: si algo o alguien ya no existe, quítalo de todas las escenas y diálogos, y arregla lo que dependía de eso para que la historia tenga sentido y fluya bien.
+- Conserva todo lo demás: la misma trama, escenas, estilo, voz, tiempo verbal y forma de escribir diálogos del autor. Mismo largo aproximado (unas ${words} palabras).
+- Respeta el cerebro del manhwa (personajes, poderes, reglas, fichas canon y capítulos anteriores); no contradigas nada.
+
+${stCtx(m, c)}
+
+${prevChapterTail(m, c)}
+
+CAPÍTULO ACTUAL:
+"""
+${base.slice(0, 60000)}
+"""
+
+Responde SOLO con el capítulo completo reescrito, sin título y sin comentarios.`;
+  const out = cleanGen(await stCall(m, c, el, prompt, `Reescribir Cap ${c.number} con un cambio`, Math.min(32000, Math.round(words * 2.6) + 1500)));
+  if (!out) return;
+  stSnap(c); s.text = out; s.last = { start: 0, end: out.length }; s.focus = true; (c.changes ||= []).unshift({ at: Date.now(), text: ch });
+  const hasPanels = (c.panels || []).length; touch(m); render(); const t = $('#stChange'); if (t) t.value = '';
+  toast(`✏️ Capítulo reescrito con tu cambio.${hasPanels ? ' Tu guion de paneles es de antes: toca “🎞️ Convertir en guion de paneles” para rehacerlo con este texto.' : ''} ↩️ Deshacer si no te gusta.`, 'ok');
 };

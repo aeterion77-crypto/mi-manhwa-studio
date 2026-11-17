@@ -16,6 +16,7 @@ VIEWS.caps = () => {
   const m = cur(); const l = chapterList(m);
   return `<div class="head"><div><h1>📖 Capítulos</h1><p class="muted">${esc(m.name)} · ${plural(l.length, 'capítulo', 'capítulos')}</p></div>
     <div class="row"><button data-a="go" data-to="${mlink(m, 'lector', 'novela')}">🎧 LEER COMO NOVELA</button><button class="pri big" data-a="newCap">＋ Nuevo capítulo</button></div></div>
+    ${typeof gxBar === 'function' ? gxBar(m, 'Cambia algo de la historia y lo arreglo en todos los capítulos. Ej. “Tomás no existe: quítalo de todos los capítulos”') : ''}
     ${l.length ? `<div class="col">${l.map(c => {
       const imgs = (c.panels || []).filter(p => p.imageId).length;
       return `<div class="card hov row between" data-a="go" data-to="${mlink(m, 'cap', c.id)}">

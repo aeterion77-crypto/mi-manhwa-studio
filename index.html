@@ -356,6 +356,10 @@ input[type=radio],input[type=checkbox]{width:20px;min-height:20px;height:20px;fl
 
 .gxgroup{margin:10px 0 2px;font-weight:700;color:var(--neon);font-size:14px}
 
+.gxbar{background:rgba(180,77,255,.07);border:1px solid rgba(180,77,255,.4);border-radius:14px;padding:10px 12px;margin:0 0 14px}
+.gxbar textarea,.stchange textarea{flex:1;min-height:44px}
+.stchange{background:rgba(255,190,60,.06);border:1px solid rgba(255,190,60,.35);border-radius:12px;padding:10px 12px;margin:6px 0 8px}
+
 </style>
 </head>
 <body>
@@ -1160,6 +1164,7 @@ VIEWS.wiki = () => {
   return `<div class="head"><div><h1>${T.icon} ${T.label}</h1><p class="muted">Constructor de universo de <b>${esc(m.name)}</b>.</p></div>
     <div class="row">${wikiAudio ? `<button data-a="go" data-to="${mlink(m, 'lector', 'universo', wikiAudio)}">🎧 Escuchar solo ${T.label.toLowerCase()}</button>` : `<button data-a="go" data-to="${mlink(m, 'lector', 'universo')}">🎧 Escuchar mi universo</button>`}
     <button data-a="dlSection" data-t="${t}">⬇ Descargar ${T.label.toLowerCase()} (Word)</button><button data-a="go" data-to="${mlink(m, 'ideas', t)}">💡 Dame ideas</button><button class="pri" data-a="go" data-to="${mlink(m, 'wiki', t, 'nuevo')}">＋ Nuevo ${T.one}</button></div></div>
+    ${typeof gxBar === 'function' ? gxBar(m, t === 'historia' ? 'Agrega o cambia algo de la historia del mundo y lo acomodo. Ej. “la Gran Guerra fue hace 300 años, no 500”' : `Agrega, cambia o quita ${T.label.toLowerCase()} y lo acomodo en todos lados. Ej. “${t === 'personajes' ? 'Tomás no existe, quítalo' : 'agrega uno nuevo que…'}”`) : ''}
     <input id="wfilter" placeholder="Filtrar ${T.label.toLowerCase()}…" style="margin-bottom:14px">
     ${arr.length ? `<div class="cards" id="wlist">${arr.map(e => `<div class="card hov ecard" data-name="${esc(norm(e.name))}" data-a="go" data-to="${mlink(m, 'wiki', t, e.id)}">${entThumb(m, t, e)}<div class="grow"><h3>${esc(e.name || '(sin nombre)')}</h3><div class="small muted">${esc(entSub(t, e))}</div>${t === 'personajes' && (e.loraId || e.trigger) ? `<div class="row" style="margin-top:6px">${e.trigger ? `<span class="chip neon">${esc(e.trigger)}</span>` : ''}${e.loraId ? '<span class="chip ok">LoRA</span>' : ''}</div>` : ''}</div></div>`).join('')}</div>`
       : `<div class="empty">Aún no hay ${T.label.toLowerCase()}. Crea uno o pide ideas.</div>`}`;
@@ -1278,6 +1283,7 @@ VIEWS.canon = () => {
   const list = [...m.canon].sort((a, b) => (a.entity || '').localeCompare(b.entity || '') || (a.since || 0) - (b.since || 0));
   return `<div class="head"><div><h1>📌 Fichas Canon</h1><p class="muted">Hechos fijos de tu historia: <span class="kbd">Kael · cicatriz · ceja izquierda · desde Cap 3</span>. El detector de continuidad los usa para avisarte.</p></div>
     <div class="row"><button data-a="dlCanon">⬇ Descargar (Word)</button><button class="pri" data-a="addCanon">＋ Nueva ficha</button></div></div>
+    ${typeof gxBar === 'function' ? gxBar(m, 'Agrega o cambia un hecho fijo y lo acomodo. Ej. “Elías tiene una cicatriz en la mano derecha desde el cap 2”') : ''}
     <datalist id="entnames">${names.map(n => `<option value="${esc(n)}">`).join('')}</datalist>
     <div class="alert info" style="margin-bottom:14px">💡 Para muertes usa el atributo <b>estado</b> con valor <b>muerto</b>. Para emociones usa <b>emoción</b>. Así te aviso si alguien aparece vivo o cambia de humor sin motivo.</div>
     ${list.length ? `<div class="panelbox scrollx"><table class="t"><thead><tr><th>Quién / qué</th><th>Atributo</th><th>Valor</th><th>Desde Cap</th><th>Nota</th><th></th></tr></thead><tbody>
@@ -1410,6 +1416,7 @@ VIEWS.caps = () => {
   const m = cur(); const l = chapterList(m);
   return `<div class="head"><div><h1>📖 Capítulos</h1><p class="muted">${esc(m.name)} · ${plural(l.length, 'capítulo', 'capítulos')}</p></div>
     <div class="row"><button data-a="go" data-to="${mlink(m, 'lector', 'novela')}">🎧 LEER COMO NOVELA</button><button class="pri big" data-a="newCap">＋ Nuevo capítulo</button></div></div>
+    ${typeof gxBar === 'function' ? gxBar(m, 'Cambia algo de la historia y lo arreglo en todos los capítulos. Ej. “Tomás no existe: quítalo de todos los capítulos”') : ''}
     ${l.length ? `<div class="col">${l.map(c => {
       const imgs = (c.panels || []).filter(p => p.imageId).length;
       return `<div class="card hov row between" data-a="go" data-to="${mlink(m, 'cap', c.id)}">
@@ -5185,6 +5192,7 @@ function coWriteHTML(m, c) {
       <label class="f">📝 Nota para Claude (estilo y tono de este capítulo)<input ${bindAttr(s, 'note')} value="${esc(s.note)}" placeholder="Ej. narración en tercera persona, oscuro, frases cortas, mucho diálogo"></label>
       <label class="f">🎯 ¿Qué quieres que pase ahora? (opcional)<input id="stWant" value="${esc(s.want || '')}" placeholder="Ej. Lira llega y detiene a Draven"></label>
     </div>
+    <div class="stchange"><div class="row nw" style="align-items:flex-start;gap:8px"><span style="font-size:20px;padding-top:6px">✏️</span><textarea id="stChange" rows="2" placeholder="¿Qué quieres cambiar de este capítulo? Ej. “Tomás no existe: que Elías esté solo en esa escena”, “que la pelea la gane Evangeline”, “más oscuro el final”"></textarea><button class="pri" data-a="stChangeRun" ${s.text.trim() || c.premise ? '' : 'disabled'}>Reescribir con el cambio</button></div><div class="tiny dim" style="margin:4px 0 0 30px">Reescribe todo el capítulo con tu cambio, sin contradecir tu biblia. Si el cambio es para toda la historia, usa la barra 🪄 de la Biblia o de Capítulos.</div></div>
     <div class="stfull row" style="margin:6px 0 10px">
       <span class="small"><b>Dos formas:</b></span>
       <button class="pri" data-a="stFull">📝 Escribir el capítulo COMPLETO</button>
@@ -5387,6 +5395,38 @@ Responde SOLO con el texto del capítulo, sin título, sin comentarios y sin not
   toast(`📝 Capítulo ${finish ? 'terminado' : 'escrito'}: ${out.split(/\s+/).length.toLocaleString('es')} palabras. Edítalo, pídele cambios, o conviértelo en guion.`, 'ok');
 };
 
+/* ✏️ reescribir el capítulo completo con un cambio */
+ACT.stChangeRun = async el => {
+  const m = cur(); const c = chapterById(m, Route.a); stSync(m, c); const s = story(c);
+  const ch = ($('#stChange')?.value || '').trim(); if (ch.length < 3) return toast('Escribe qué quieres cambiar', 'err');
+  const base = s.text.trim();
+  if (!base) { c.premise = (c.premise ? c.premise + '\n' : '') + 'CAMBIO: ' + ch; touch(m); render(); return toast('Lo agregué a la idea del capítulo. Ahora toca “📝 Escribir el capítulo COMPLETO”.', 'ok'); }
+  const words = base.split(/\s+/).length;
+  const prompt = `Eres el escritor de este manhwa/novela. REESCRIBE el Capítulo ${c.number} completo aplicando este CAMBIO del autor:
+«${ch}»
+
+Reglas:
+- Aplica el cambio en TODO el capítulo: si algo o alguien ya no existe, quítalo de todas las escenas y diálogos, y arregla lo que dependía de eso para que la historia tenga sentido y fluya bien.
+- Conserva todo lo demás: la misma trama, escenas, estilo, voz, tiempo verbal y forma de escribir diálogos del autor. Mismo largo aproximado (unas ${words} palabras).
+- Respeta el cerebro del manhwa (personajes, poderes, reglas, fichas canon y capítulos anteriores); no contradigas nada.
+
+${stCtx(m, c)}
+
+${prevChapterTail(m, c)}
+
+CAPÍTULO ACTUAL:
+"""
+${base.slice(0, 60000)}
+"""
+
+Responde SOLO con el capítulo completo reescrito, sin título y sin comentarios.`;
+  const out = cleanGen(await stCall(m, c, el, prompt, `Reescribir Cap ${c.number} con un cambio`, Math.min(32000, Math.round(words * 2.6) + 1500)));
+  if (!out) return;
+  stSnap(c); s.text = out; s.last = { start: 0, end: out.length }; s.focus = true; (c.changes ||= []).unshift({ at: Date.now(), text: ch });
+  const hasPanels = (c.panels || []).length; touch(m); render(); const t = $('#stChange'); if (t) t.value = '';
+  toast(`✏️ Capítulo reescrito con tu cambio.${hasPanels ? ' Tu guion de paneles es de antes: toca “🎞️ Convertir en guion de paneles” para rehacerlo con este texto.' : ''} ↩️ Deshacer si no te gusta.`, 'ok');
+};
+
 /* =====================================================================
    🪄 CAMBIAR ALGO EN TODO MI MANHWA
    Le dices a Claude el cambio como en un chat ("Kael ahora tiene 19 años",
@@ -5483,6 +5523,7 @@ Operaciones posibles:
 - {"op":"new","type":"capitulo","data":{"number":número,"title":"","premise":"qué pasa"},"why":""}  → capítulo nuevo
 - {"op":"doc_replace","find":"texto EXACTO del documento base","replace":"texto nuevo","why":""}  → cambiar algo en el documento de la biblia
 - {"op":"doc_insert","after":"texto EXACTO del documento (ej. el título de la parte)","text":"lo nuevo","why":""}  → agregar algo al documento de la biblia en su lugar
+- {"op":"delete","path":"ent.<id> | canon.<id> | sec.<id>","why":""}  → QUITAR por completo una ficha (personaje, lugar, poder, evento…), una ficha canon o una sección. Si quitas un personaje, además reescribe con "replace"/"set" las partes de la historia, capítulos, eventos y diálogos donde aparecía para que todo siga teniendo sentido sin él (y quítalo del documento de la biblia).
 - {"path":"dirección","op":"append","text":"texto a AGREGAR al final de ese campo","why":""}  → para añadir información a algo que ya existe sin borrar lo que tenía
 
 Para llenar un campo VACÍO de una ficha que ya existe usa la dirección ent.<id>.<campo> con "set" (el id lo ves en las otras direcciones de esa ficha).
@@ -5518,6 +5559,13 @@ function gxReview(m, q, r, opts = {}) {
       const summ = T.fields.filter(([k]) => k !== 'name' && d[k]).map(([k, l]) => `${l}: ${d[k]}`).join('\n');
       items.push({ ...x, label: ex ? `${T.icon} Completar ficha de ${ex.name}` : `➕ ${T.icon} Nuevo ${T.one}: ${d.name}`, before: ex ? '(solo llena lo que esté vacío y agrega lo nuevo)' : '—', after: summ || d.name }); continue;
     }
+    if (x.op === 'delete' && x.path) {
+      const [kd, id] = x.path.split('.');
+      if (kd === 'ent') { const e = findEntity(m, id); if (!e) continue; const T = TYPES[findEntityType(m, id)]; const refs = gxFields(m).filter(f => !f.p.startsWith('ent.' + id + '.') && f.v.includes(e.name)).length; items.push({ ...x, label: `🗑️ Quitar ${T.one}: ${e.name}`, before: `${e.name}${e.role ? ' · ' + e.role : ''}`, after: `(se borra su ficha, sus relaciones y su nombre de los paneles)${refs ? ` · aún se menciona en ${refs} lugares` : ''}` }); continue; }
+      if (kd === 'canon') { const f = m.canon.find(c => c.id === id); if (f) items.push({ ...x, label: `🗑️ Quitar ficha canon`, before: `${f.entity} · ${f.attribute}: ${f.value}`, after: '(se borra)' }); continue; }
+      if (kd === 'sec') { const sx = (m.bible.sections || []).find(c => c.id === id); if (sx) items.push({ ...x, label: `🗑️ Quitar sección ${sx.icon} ${sx.title}`, before: sx.text.slice(0, 300), after: '(se borra)' }); continue; }
+      continue;
+    }
     if (x.op === 'canon' && x.entity && x.attribute) { items.push({ ...x, label: `📌 Nueva ficha canon: ${x.entity} · ${x.attribute}`, before: '—', after: x.value }); continue; }
     const f = gxFields(m).find(ff => ff.p === x.path) || gxEmpty(m, x.path); if (!f) continue;
     if (x.op === 'append') { if (!x.text) continue; items.push({ ...x, label: '➕ ' + f.l, before: f.v.length > 200 ? '…' + f.v.slice(-200) : f.v, after: (f.v.length > 200 ? '…' + f.v.slice(-120) : f.v) + '\n' + x.text }); continue; }
@@ -5552,6 +5600,16 @@ function gxReview(m, q, r, opts = {}) {
         if (ex) { for (const [k] of T.fields) if (d[k] != null && String(d[k]).trim() && k !== 'name') { const cv = String(ex[k] ?? '').trim(); if (!cv) ex[k] = String(d[k]); else if (!cv.includes(String(d[k]).trim())) ex[k] = cv + '\n' + d[k]; } }
         else { const e = { id: uid(T.key[0] + '_'), relations: [], createdAt: Date.now() }; for (const [k, , ty] of T.fields) if (d[k] != null && String(d[k]).trim()) e[k] = ty === 'num' ? Number(d[k]) || 0 : String(d[k]); if (it.type === 'historia') e.order = arr.length + 1; arr.push(e); }
         n++; continue;
+      }
+      if (it.op === 'delete') {
+        const [kd, id] = it.path.split('.');
+        if (kd === 'ent') { const t = findEntityType(m, id); const e = findEntity(m, id); if (!t || !e) continue; const T = TYPES[t]; m[T.key] = m[T.key].filter(x => x.id !== id);
+          for (const k of Object.keys(TYPES)) for (const o of m[TYPES[k].key] || []) if (o.relations) o.relations = o.relations.filter(r => r.target !== id);
+          for (const c of chapterList(m)) for (const p of c.panels || []) if ((p.characters || []).some(n2 => norm(n2) === norm(e.name))) { p.characters = p.characters.filter(n2 => norm(n2) !== norm(e.name)); p.approved = false; }
+          if (m.bible.protagonistId === id) m.bible.protagonistId = ''; n++; continue; }
+        if (kd === 'canon') { m.canon = m.canon.filter(x => x.id !== id); n++; continue; }
+        if (kd === 'sec') { m.bible.sections = (m.bible.sections || []).filter(x => x.id !== id); n++; continue; }
+        continue;
       }
       if (it.op === 'append') { const cv = gxGet(m, it.path); if (gxSet(m, it.path, cv ? cv + '\n' + it.text : it.text)) { n++; touched.add(it.path); } continue; }
       if (it.op === 'canon') { m.canon.push({ id: uid('k_'), entity: it.entity, attribute: it.attribute, value: it.value, since: '', note: 'Por cambio: ' + q.slice(0, 80) }); n++; continue; }
@@ -5597,6 +5655,14 @@ function gxEmpty(m, path) {
   if (kind === 'cap' && chapterById(m, a) && ['title', 'premise', 'summary'].includes(b)) return { p: path, l: `📖 Cap ${chapterById(m, a).number} · ${b}`, v: '' };
   if (kind === 'sec') { const sx = (m.bible.sections || []).find(x => x.id === a); if (sx) return { p: path, l: `${sx.icon} ${sx.title}`, v: '' }; }
   return null;
+}
+
+/* barra compacta para agregar / cambiar / quitar (en biblia, canon, secciones, capítulos) */
+function gxBar(m, ph = '') {
+  return `<div class="gxbar"><div class="row nw" style="align-items:flex-start;gap:8px"><span style="font-size:22px;padding-top:6px">🪄</span>
+    <textarea id="gxQ" rows="2" placeholder="${esc(ph || 'Agrega, cambia o quita lo que quieras y Claude lo acomoda en todos lados. Ej. “Tomás, el amigo de Elías, no existe: quítalo y arregla esa parte de la historia”')}"></textarea>
+    <div class="col" style="gap:6px"><button class="pri" data-a="gxRun">Hacerlo</button><button class="sm ghost" data-a="gxUndo" title="Deshacer el último cambio">↩️</button></div></div>
+    <div class="tiny dim" style="margin:4px 0 0 32px">Se escribe primero en 📜 tu biblia y de ahí se reparte a fichas, canon, historia, capítulos y paneles. Siempre te muestro todo antes de guardar.</div></div>`;
 }
 
 /* =====================================================================
@@ -5692,7 +5758,7 @@ VIEWS.bibliadoc = () => {
   const head = `<div class="head"><div><h1>📜 Mi biblia</h1><p class="muted">${tab === 'base' ? 'Tu documento de la biblia es la base: edítalo aquí como en Word, agrega lo que quieras y toca “Repartir” para que se acomode en todo tu manhwa.' : tab === 'viva' ? 'Así quedó repartida tu biblia en la app. Lo que edites aquí cambia directo en cada ficha (y la app te ofrece pasarlo a tu documento).' : 'Las versiones de tu biblia tal como las subiste (respaldo).'}</p></div>
     <div class="row"><button data-a="go" data-to="${mlink(m, 'biblia')}">← Biblia</button><button data-a="dlMaster">⬇ Word</button></div></div>
     <div class="row" style="margin-bottom:12px"><button class="${tab === 'base' ? 'pri' : ''}" data-a="go" data-to="${mlink(m, 'bibliadoc', 'base')}">📜 Mi biblia (documento base)</button><button class="${tab === 'viva' ? 'pri' : ''}" data-a="go" data-to="${mlink(m, 'bibliadoc', 'viva')}">🗂️ Cómo quedó repartida</button><button class="${tab === 'original' ? 'pri' : ''}" data-a="go" data-to="${mlink(m, 'bibliadoc', 'original')}">📚 Versiones que subiste${(b.sources || []).length ? ' (' + b.sources.length + ')' : ''}</button></div>`;
-  if (tab === 'base') return head + masterHTML(m);
+  if (tab === 'base') return head + gxBar(m, 'Agrega, cambia o quita algo de tu historia y lo escribo en tu biblia y lo reparto. Ej. “Tomás, el amigo de Elías, no existe: quítalo y arregla esa parte”') + masterHTML(m);
   if (tab === 'original') {
     const docs = b.sources || [];
     return head + (docs.length ? docs.map(d => `<div class="docpage"><div class="row between"><h2 style="margin:0">📄 ${esc(d.name)}</h2><span class="small muted">${fmtDate(d.at)} · ${d.text.split(/\s+/).length.toLocaleString('es')} palabras</span></div>
@@ -5707,7 +5773,7 @@ VIEWS.bibliadoc = () => {
         ${(e.relations || []).length ? `<div class="docrow"><span class="doclab">Relaciones</span><span class="small">${e.relations.map(r => `${esc(r.kind)} → <b>${esc(findEntity(m, r.target)?.name || '?')}</b>`).join(' · ')}</span></div>` : ''}
         <div class="row" style="justify-content:flex-end"><button class="sm ghost" data-a="go" data-to="${mlink(m, 'wiki', t, e.id)}">Abrir ficha →</button></div></article>`).join('') : `<p class="muted small">Vacío.</p>`}</section>`;
   };
-  return head + `<div class="doclayout">
+  return head + gxBar(m) + `<div class="doclayout">
     <nav class="doctoc"><div class="tiny dim" style="margin-bottom:6px">ÍNDICE</div>${toc.map(([id, l]) => `<a data-a="secScroll" data-id="${id}">${l}</a>`).join('')}
       <input id="docFind" placeholder="🔎 Buscar en mi biblia" style="margin-top:10px"><div class="tiny dim" id="docFindN"></div>
       <div class="tiny dim" style="margin-top:10px">✔ Se guarda solo mientras escribes</div></nav>

@@ -16,7 +16,7 @@ VIEWS.bibliadoc = () => {
   const head = `<div class="head"><div><h1>📜 Mi biblia</h1><p class="muted">${tab === 'base' ? 'Tu documento de la biblia es la base: edítalo aquí como en Word, agrega lo que quieras y toca “Repartir” para que se acomode en todo tu manhwa.' : tab === 'viva' ? 'Así quedó repartida tu biblia en la app. Lo que edites aquí cambia directo en cada ficha (y la app te ofrece pasarlo a tu documento).' : 'Las versiones de tu biblia tal como las subiste (respaldo).'}</p></div>
     <div class="row"><button data-a="go" data-to="${mlink(m, 'biblia')}">← Biblia</button><button data-a="dlMaster">⬇ Word</button></div></div>
     <div class="row" style="margin-bottom:12px"><button class="${tab === 'base' ? 'pri' : ''}" data-a="go" data-to="${mlink(m, 'bibliadoc', 'base')}">📜 Mi biblia (documento base)</button><button class="${tab === 'viva' ? 'pri' : ''}" data-a="go" data-to="${mlink(m, 'bibliadoc', 'viva')}">🗂️ Cómo quedó repartida</button><button class="${tab === 'original' ? 'pri' : ''}" data-a="go" data-to="${mlink(m, 'bibliadoc', 'original')}">📚 Versiones que subiste${(b.sources || []).length ? ' (' + b.sources.length + ')' : ''}</button></div>`;
-  if (tab === 'base') return head + masterHTML(m);
+  if (tab === 'base') return head + gxBar(m, 'Agrega, cambia o quita algo de tu historia y lo escribo en tu biblia y lo reparto. Ej. “Tomás, el amigo de Elías, no existe: quítalo y arregla esa parte”') + masterHTML(m);
   if (tab === 'original') {
     const docs = b.sources || [];
     return head + (docs.length ? docs.map(d => `<div class="docpage"><div class="row between"><h2 style="margin:0">📄 ${esc(d.name)}</h2><span class="small muted">${fmtDate(d.at)} · ${d.text.split(/\s+/).length.toLocaleString('es')} palabras</span></div>
@@ -31,7 +31,7 @@ VIEWS.bibliadoc = () => {
         ${(e.relations || []).length ? `<div class="docrow"><span class="doclab">Relaciones</span><span class="small">${e.relations.map(r => `${esc(r.kind)} → <b>${esc(findEntity(m, r.target)?.name || '?')}</b>`).join(' · ')}</span></div>` : ''}
         <div class="row" style="justify-content:flex-end"><button class="sm ghost" data-a="go" data-to="${mlink(m, 'wiki', t, e.id)}">Abrir ficha →</button></div></article>`).join('') : `<p class="muted small">Vacío.</p>`}</section>`;
   };
-  return head + `<div class="doclayout">
+  return head + gxBar(m) + `<div class="doclayout">
     <nav class="doctoc"><div class="tiny dim" style="margin-bottom:6px">ÍNDICE</div>${toc.map(([id, l]) => `<a data-a="secScroll" data-id="${id}">${l}</a>`).join('')}
       <input id="docFind" placeholder="🔎 Buscar en mi biblia" style="margin-top:10px"><div class="tiny dim" id="docFindN"></div>
       <div class="tiny dim" style="margin-top:10px">✔ Se guarda solo mientras escribes</div></nav>

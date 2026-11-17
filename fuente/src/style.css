@@ -333,3 +333,7 @@ input[type=radio],input[type=checkbox]{width:20px;min-height:20px;height:20px;fl
 .mdbar .alert{margin-bottom:8px}
 
 .gxgroup{margin:10px 0 2px;font-weight:700;color:var(--neon);font-size:14px}
+
+.gxbar{background:rgba(180,77,255,.07);border:1px solid rgba(180,77,255,.4);border-radius:14px;padding:10px 12px;margin:0 0 14px}
+.gxbar textarea,.stchange textarea{flex:1;min-height:44px}
+.stchange{background:rgba(255,190,60,.06);border:1px solid rgba(255,190,60,.35);border-radius:12px;padding:10px 12px;margin:6px 0 8px}

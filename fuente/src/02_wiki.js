@@ -208,6 +208,7 @@ VIEWS.wiki = () => {
   return `<div class="head"><div><h1>${T.icon} ${T.label}</h1><p class="muted">Constructor de universo de <b>${esc(m.name)}</b>.</p></div>
     <div class="row">${wikiAudio ? `<button data-a="go" data-to="${mlink(m, 'lector', 'universo', wikiAudio)}">🎧 Escuchar solo ${T.label.toLowerCase()}</button>` : `<button data-a="go" data-to="${mlink(m, 'lector', 'universo')}">🎧 Escuchar mi universo</button>`}
     <button data-a="dlSection" data-t="${t}">⬇ Descargar ${T.label.toLowerCase()} (Word)</button><button data-a="go" data-to="${mlink(m, 'ideas', t)}">💡 Dame ideas</button><button class="pri" data-a="go" data-to="${mlink(m, 'wiki', t, 'nuevo')}">＋ Nuevo ${T.one}</button></div></div>
+    ${typeof gxBar === 'function' ? gxBar(m, t === 'historia' ? 'Agrega o cambia algo de la historia del mundo y lo acomodo. Ej. “la Gran Guerra fue hace 300 años, no 500”' : `Agrega, cambia o quita ${T.label.toLowerCase()} y lo acomodo en todos lados. Ej. “${t === 'personajes' ? 'Tomás no existe, quítalo' : 'agrega uno nuevo que…'}”`) : ''}
     <input id="wfilter" placeholder="Filtrar ${T.label.toLowerCase()}…" style="margin-bottom:14px">
     ${arr.length ? `<div class="cards" id="wlist">${arr.map(e => `<div class="card hov ecard" data-name="${esc(norm(e.name))}" data-a="go" data-to="${mlink(m, 'wiki', t, e.id)}">${entThumb(m, t, e)}<div class="grow"><h3>${esc(e.name || '(sin nombre)')}</h3><div class="small muted">${esc(entSub(t, e))}</div>${t === 'personajes' && (e.loraId || e.trigger) ? `<div class="row" style="margin-top:6px">${e.trigger ? `<span class="chip neon">${esc(e.trigger)}</span>` : ''}${e.loraId ? '<span class="chip ok">LoRA</span>' : ''}</div>` : ''}</div></div>`).join('')}</div>`
       : `<div class="empty">Aún no hay ${T.label.toLowerCase()}. Crea uno o pide ideas.</div>`}`;
@@ -326,6 +327,7 @@ VIEWS.canon = () => {
   const list = [...m.canon].sort((a, b) => (a.entity || '').localeCompare(b.entity || '') || (a.since || 0) - (b.since || 0));
   return `<div class="head"><div><h1>📌 Fichas Canon</h1><p class="muted">Hechos fijos de tu historia: <span class="kbd">Kael · cicatriz · ceja izquierda · desde Cap 3</span>. El detector de continuidad los usa para avisarte.</p></div>
     <div class="row"><button data-a="dlCanon">⬇ Descargar (Word)</button><button class="pri" data-a="addCanon">＋ Nueva ficha</button></div></div>
+    ${typeof gxBar === 'function' ? gxBar(m, 'Agrega o cambia un hecho fijo y lo acomodo. Ej. “Elías tiene una cicatriz en la mano derecha desde el cap 2”') : ''}
     <datalist id="entnames">${names.map(n => `<option value="${esc(n)}">`).join('')}</datalist>
     <div class="alert info" style="margin-bottom:14px">💡 Para muertes usa el atributo <b>estado</b> con valor <b>muerto</b>. Para emociones usa <b>emoción</b>. Así te aviso si alguien aparece vivo o cambia de humor sin motivo.</div>
     ${list.length ? `<div class="panelbox scrollx"><table class="t"><thead><tr><th>Quién / qué</th><th>Atributo</th><th>Valor</th><th>Desde Cap</th><th>Nota</th><th></th></tr></thead><tbody>
