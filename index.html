@@ -1492,7 +1492,7 @@ VIEWS.cap = () => {
         <label class="f">Título<input ${bindAttr(c, 'title')} value="${esc(c.title)}"></label>
         <label class="f">Describe el capítulo<textarea ${bindAttr(c, 'premise')} placeholder="Ej. Cap 12, pelea en la azotea entre Kael y Draven bajo la lluvia. Lira llega al final.">${esc(c.premise)}</textarea></label>
         <div class="grid2"><label class="f">Director de paneles<select ${bindAttr(c, 'tone')}>${[['auto', 'Automático'], ['pelea', 'Pelea (chico, chico, ¡GRANDE!)'], ['drama', 'Drama (grandes y lentos)'], ['romance', 'Romance'], ['misterio', 'Misterio / terror'], ['comedia', 'Comedia']].map(([v, l]) => `<option value="${v}" ${c.tone === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
-        <label class="f">Paneles<input id="npan" type="number" min="5" max="60" value="${c.panelTarget || 30}"></label></div>
+        <label class="f">Paneles<input id="npan" type="number" min="5" max="100" value="${c.panelTarget || 30}"></label></div>
         <div class="row">${jobBtn('script:' + c.id, `✨ Escribir guion (${c.panelTarget || 30} paneles)`, 'class="pri big" data-a="writeScript"', 'Escribiendo guion…')}<button data-a="pasteScript">📋 Ya lo tengo: pegar mi guion</button>${c.panels.length ? '<button data-a="applyDirector">🎬 Aplicar director</button>' : ''}</div>
         <p class="tiny dim">Usa el cerebro completo: personajes, LoRAs, trigger words, fichas canon y capítulos anteriores.${c.story?.text?.trim() ? ' <b>Además usa lo que escribiste en “✍️ Escribir con Claude”.</b>' : ''}</p>
       </div>
@@ -1578,7 +1578,7 @@ ACT.applyDirector = () => { const m = cur(); const c = chapterById(m, Route.a); 
 /* Escribir guion */
 ACT.writeScript = async el => {
   const m = cur(); const c = chapterById(m, Route.a);
-  const n = Math.min(60, Math.max(5, Number($('#npan').value) || 30)); c.panelTarget = n;
+  const n = Math.min(100, Math.max(5, Number($('#npan').value) || 30)); c.panelTarget = n;
   const stTxt = (c.story?.text || '').trim();
   if (!c.premise.trim() && !stTxt) return toast('Describe primero qué pasa en el capítulo (o escríbelo en “✍️ Escribir con Claude”)', 'err');
   if (c.panels.length && !await confirmBox(`Este capítulo ya tiene ${c.panels.length} paneles. ¿Reemplazarlos con un guion nuevo? (las imágenes quedan en la Galería)`, { ok: 'Reemplazar', title: 'Reescribir guion' })) return;
@@ -1604,7 +1604,7 @@ FORMATO: una línea JSON por objeto, sin nada más (JSONL):
 {"t":"cliff","title":"…","description":"opción de final para enganchar"}  (3 líneas cliff)`;
   const key = 'script:' + c.id; if (jobRunning(key)) return toast('Ya estoy escribiendo este guion ⏳ (mira la barra de arriba)');
   await busy(el, async () => {
-    const { text, stop } = await ai(prompt, { max_tokens: 16000, temperature: 0.85, estOut: n * 260 + 400, title: `Guion Cap ${c.number} · ${n} paneles`, job: { key, kind: 'script', meta: { mid: m.id, cid: c.id }, link: mlink(m, 'cap', c.id) } });
+    const { text, stop } = await ai(prompt, { max_tokens: Math.min(64000, n * 340 + 2000), temperature: 0.85, estOut: n * 260 + 400, title: `Guion Cap ${c.number} · ${n} paneles`, job: { key, kind: 'script', meta: { mid: m.id, cid: c.id }, link: mlink(m, 'cap', c.id) } });
     applyScriptText(m, c, text, stop);
   }, 'Escribiendo guion…');
 };
@@ -1620,6 +1620,7 @@ function applyScriptText(m, c, text, stop) {
     if (meta?.summary) c.draftSummary = meta.summary;
     if (m.sample) m.sampleTouched = true;
     touch(m); render();
+    if (c.panelTarget && c.panels.length < c.panelTarget * 0.9) toast(`Claude escribió ${c.panels.length} de los ${c.panelTarget} paneles que pediste. Puedes agregar los que falten a mano o volver a pedirlo.`, 'err');
     toast(`Guion listo: ${c.panels.length} paneles ✨ Revisa, edita y aprueba los que pasen a Fal.ai.${stop === 'max_tokens' ? ' (se cortó al final, añade los que falten)' : ''}`, 'ok');
     const dead = localDeadCheck(m, c); if (dead.length) toast('⚠ ' + dead[0], 'err');
 }
@@ -1806,7 +1807,7 @@ GUION DEL AUTOR:\n${txt}
 FORMATO JSONL (una línea por panel, nada más):
 {"t":"panel","size":"S|M|L|XL","shot":"…","description":"…","characters":["…"],"dialogues":[{"who":"…","type":"normal|grito|pensamiento|narracion|susurro","text":"…"}],"sfx":["…"],"prompt_en":"…"}`;
     await busy(e.target, async () => {
-      const { text } = await ai(prompt, { max_tokens: 16000, estOut: Math.round(txt.length / 2.5) + 2000, title: 'Ordenar mi guion en paneles', temperature: 0.2 });
+      const { text } = await ai(prompt, { max_tokens: Math.min(64000, Math.round(txt.length / 2) + 6000), estOut: Math.round(txt.length / 2.5) + 2000, title: 'Ordenar mi guion en paneles', temperature: 0.2 });
       const rows = parseJSONL(text).filter(r => r.t === 'panel' || r.description);
       if (!rows.length) throw new Error('No se pudieron leer los paneles. Intenta de nuevo.');
       const ps = rows.map(p => mkPanel({ size: SIZES[p.size] ? p.size : 'M', shot: p.shot || '', description: p.description || '', characters: p.characters || [], dialogues: (p.dialogues || []).map(d => ({ who: d.who || '', type: DTYPES[d.type] ? d.type : 'normal', text: d.text || '' })), sfx: p.sfx || [], prompt_en: p.prompt_en || '' }));
