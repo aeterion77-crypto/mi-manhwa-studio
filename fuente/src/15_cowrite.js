@@ -35,12 +35,13 @@ function coWriteHTML(m, c) {
       <button data-a="stAsk">💬 Pregúntale a Claude</button>
     </div>
     ${s.answer ? `<div class="alert info" style="margin-top:10px"><div class="grow"><b>Claude:</b> ${esc(s.answer).replace(/\n/g, '<br>')}</div><button class="sm icon ghost" data-a="stAnsClose">✕</button></div>` : ''}
-    ${s.fixes.length ? `<div class="sect" style="margin-top:10px"><h3 style="margin:0 0 6px">🩹 Correcciones de Claude (${s.fixes.length})</h3>${s.fixes.map((f, i) => `<div class="alert warn" style="margin-bottom:6px"><div class="grow"><div class="small"><s style="opacity:.7">${esc(f.original)}</s></div><div class="small"><b>→ ${esc(f.fix)}</b></div>${f.why ? `<div class="tiny dim">${esc(f.why)}</div>` : ''}</div><div class="col" style="gap:4px"><button class="sm ok" data-a="stFixApply" data-i="${i}">Aplicar</button><button class="sm ghost" data-a="stFixSkip" data-i="${i}">Ignorar</button></div></div>`).join('')}<div class="row"><button class="sm ok" data-a="stFixAll">Aplicar todas</button><button class="sm ghost" data-a="stFixClear">Ignorar todas</button></div></div>` : ''}
+    ${s.fixes.length ? `<div class="sect" style="margin-top:10px"><h3 style="margin:0 0 6px">🩹 Correcciones de Claude (${s.fixes.length})</h3>${s.fixes.map((f, i) => `<div class="alert warn" style="margin-bottom:6px"><div class="grow"><div class="small"><s style="opacity:.7">${esc(f.original)}</s></div><div class="small"><b>→ ${esc(f.fix)}</b></div>${f.why ? `<div class="tiny dim">${esc(f.why)}</div>` : ''}</div><div class="col" style="gap:4px"><button class="sm ok" data-a="stFixApply" data-i="${i}">Aplicar</button><button class="sm" data-a="fixAccept" data-i="${i}" title="No es error: así lo quiero, actualiza mi biblia y todo">✔ Así lo quiero</button><button class="sm ghost" data-a="stFixSkip" data-i="${i}">Ignorar</button></div></div>`).join('')}<div class="row"><button class="sm ok" data-a="stFixAll">Aplicar todas</button><button class="sm ghost" data-a="stFixClear">Ignorar todas</button></div></div>` : ''}
     <div class="row" style="margin-top:12px;border-top:1px solid var(--line);padding-top:12px">
       <button class="ok" data-a="stToScript" ${words ? '' : 'disabled'}>🎞️ Convertir en guion de paneles</button>
       <button data-a="stToNovel" ${words ? '' : 'disabled'}>🎧 Guardar como versión novela</button>
       <button data-a="stFromNovel" ${c.novel && !words ? '' : 'disabled'}>📖 Traer la versión novela</button>
       <button data-a="stDl" ${words ? '' : 'disabled'}>⬇ Word</button>
+      <button class="pri" data-a="capToBible" ${words || (c.panels || []).length ? '' : 'disabled'} title="Todo lo que cambiaste o agregaste en este capítulo se toma como correcto y se pasa a tu biblia y a todos lados">📜 Actualizar mi biblia con este capítulo</button>
     </div>
   </div>`;
 }

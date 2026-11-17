@@ -70,6 +70,7 @@ function gxPrompt(m, q, opts = {}) {
     }
   }
   const typeList = Object.entries(TYPES).map(([t, T]) => `  "${t}" (${T.label}): campos ${T.fields.filter(([k]) => !['loraId', 'loraWeight', 'trigger'].includes(k)).map(([k, l, ty, o]) => `${k}${ty === 'select' ? '[' + o.join('/') + ']' : ''}`).join(', ')}`).join('\n');
+  const fromCap = opts.fromChapter ? chapterById(m, opts.fromChapter) : null;
   return `Eres el editor de continuidad del manhwa "${m.name}". El autor quiere hacer este CAMBIO o AGREGAR esto a su historia:
 «${q}»
 
@@ -77,7 +78,7 @@ ${opts.noDoc ? 'El documento base del autor (doc.text) YA tiene el cambio: NO lo
 TÍTULOS Y PARTES DE SU DOCUMENTO:
 ${typeof docHeads === 'function' ? docHeads(master(m).text).slice(0, 120).join('\n') : ''}`}
 
-Si el autor AGREGA información nueva: si dice dónde ponerla, ponla ahí; si no lo dice, decide tú el mejor lugar (personaje, lugar, poder, objeto, facción, evento de la historia del mundo, ficha canon, una sección de la biblia como Temas/Arcos/Glosario/Estilo, o un capítulo). Si un personaje/lugar/etc. ya existe, COMPLETA su ficha en vez de crear otro igual. Reparte el texto en todos los lugares que correspondan y no pierdas nada de lo que escribió el autor.
+${fromCap ? `ESTO VIENE DEL CAPÍTULO ${fromCap.number}: lo que dice ese capítulo es la VERDAD (el autor ya decidió que es correcto). Actualiza el documento de la biblia y TODO lo demás (fichas, canon, historia del mundo, secciones, otros capítulos) para que coincida con él: lo que contradiga al capítulo se cambia a favor del capítulo, y lo nuevo que aparece en el capítulo (personajes, lugares, poderes, hechos, cambios de estado, relaciones) se agrega. NO modifiques el texto ni los paneles del Capítulo ${fromCap.number} (direcciones cap.${fromCap.id}.* y pan.${fromCap.id}.*). Si una ficha canon dice otra cosa, cámbiala.\n\n` : ''}Si el autor AGREGA información nueva: si dice dónde ponerla, ponla ahí; si no lo dice, decide tú el mejor lugar (personaje, lugar, poder, objeto, facción, evento de la historia del mundo, ficha canon, una sección de la biblia como Temas/Arcos/Glosario/Estilo, o un capítulo). Si un personaje/lugar/etc. ya existe, COMPLETA su ficha en vez de crear otro igual. Reparte el texto en todos los lugares que correspondan y no pierdas nada de lo que escribió el autor.
 
 Encuentra TODO lo que hay que modificar para que el cambio quede igual en todos lados (biblia, fichas de personajes/lugares/poderes, fichas canon, capítulos, texto escrito, versión novela, paneles, diálogos, prompts de imagen en inglés) y propón cada modificación. Cambia SOLO lo necesario y conserva el estilo del autor. No inventes cosas que el autor no pidió. Si el cambio contradice algo importante o hay algo que no queda claro, dilo en "dudas".
 
@@ -116,6 +117,7 @@ ACT.gxRun = async el => {
 function gxReview(m, q, r, opts = {}) {
   const items = [];
   for (const x of r.cambios || []) {
+    if (opts.skipChapter && x.path && (x.path.startsWith('cap.' + opts.skipChapter + '.') || x.path.startsWith('pan.' + opts.skipChapter + '.'))) continue;
     const isDoc = x.op === 'doc_replace' || x.op === 'doc_insert' || x.path === 'doc.text';
     if (opts.noDoc && isDoc) continue; if (opts.onlyDoc && !isDoc) continue;
     if (x.op === 'doc_replace') { const T0 = master(m).text; if (x.find && T0.includes(x.find) && x.find !== x.replace) items.push({ ...x, label: '📜 En tu biblia: cambiar', before: x.find, after: x.replace ?? '' }); continue; }
@@ -192,6 +194,7 @@ function gxReview(m, q, r, opts = {}) {
     let autoDoc = 0; if (!opts.noDoc && !opts.onlyDoc && !sel.some(it => it.op === 'doc_replace' || it.op === 'doc_insert') && snapDiff(m).length) { bg.remove(); autoDoc = await mdAutoWrite(m); n += autoDoc; }
     if (opts.after) opts.after(); else if (!wasPending) mdSynced(m); else master(m).snap = fieldsSnap(m);
     (m.changeLog ||= []).unshift({ at: Date.now(), text: q, n }); m.changeLog = m.changeLog.slice(0, 30);
+    if (opts.done) opts.done();
     touch(m); bg.remove(); const qi = $('#gxQ'); if (qi) qi.value = ''; render();
     toast(`${opts.onlyDoc ? '📜 Listo: tu biblia quedó al día' : `🪄 Listo: ${n} cambios hechos en tu biblia y en todo tu manhwa`}.${withImg.size ? ` ${withImg.size} paneles que ya tenían imagen quedaron sin aprobar (revísalos y vuelve a dibujarlos si quieres).` : ''} Puedes deshacerlo.`, 'ok');
   };
@@ -235,3 +238,19 @@ function gxBar(m, ph = '') {
     <div class="col" style="gap:6px"><button class="pri" data-a="gxRun">Hacerlo</button><button class="sm ghost" data-a="gxUndo" title="Deshacer el último cambio">↩️</button></div></div>
     <div class="tiny dim" style="margin:4px 0 0 32px">Se escribe primero en 📜 tu biblia y de ahí se reparte a fichas, canon, historia, capítulos y paneles. Siempre te muestro todo antes de guardar.</div></div>`;
 }
+
+/* 📜 El capítulo manda: actualizar la biblia y todo con lo que escribí en él */
+function capTruth(c) { const t = (c.story?.text || '').trim(); return t ? t.slice(0, 45000) : (c.panels || []).length ? scriptText(c).slice(0, 45000) : (c.premise || ''); }
+async function bibleFromChapter(m, c, el, focus = '', done = null) {
+  const body = capTruth(c); if (!body.trim()) return toast('Este capítulo todavía no tiene texto ni guion', 'err');
+  const q = focus
+    ? `En el Capítulo ${c.number} decidí esto y ES CORRECTO (no es un error, así lo quiero): «${focus}». Actualiza mi biblia y todo mi manhwa para que coincida.\n\nCAPÍTULO ${c.number} (la verdad):\n${body}`
+    : `Actualiza mi biblia y todo mi manhwa con lo que pasa en el Capítulo ${c.number}: todo lo que cambié o agregué en él es CORRECTO.\n\nCAPÍTULO ${c.number} (la verdad):\n${body}`;
+  let r; await busy(el, async () => { r = await aiJSON(gxPrompt(m, q, { fromChapter: c.id }), { max_tokens: 16000, temperature: 0.2, title: `Actualizar biblia con el Cap ${c.number}`, estOut: 4000 }); }, 'Comparando con tu biblia…');
+  if (!r) return;
+  gxReview(m, focus ? `Cap ${c.number}: así lo quiero (${focus.slice(0, 80)})` : `Actualizar mi biblia con el Cap ${c.number}`, r, { skipChapter: c.id, done });
+}
+ACT.capToBible = el => { const m = cur(); const c = chapterById(m, Route.a); if (typeof stSync === 'function' && $('#stTxt')) stSync(m, c); bibleFromChapter(m, c, el, '', () => { c.warnings = []; if (c.story) c.story.fixes = []; c.bibleAt = Date.now(); }); };
+ACT.warnAccept = el => { const m = cur(); const c = chapterById(m, Route.a); const i = +el.dataset.i; const w = (c.warnings || [])[i]; if (!w) return; bibleFromChapter(m, c, el, `${w.message}${w.panel ? ' (panel ' + w.panel + ')' : ''}`, () => { c.warnings = (c.warnings || []).filter(x => x !== w); }); };
+ACT.deadAccept = el => { const m = cur(); const c = chapterById(m, Route.a); bibleFromChapter(m, c, el, el.dataset.msg || ''); };
+ACT.fixAccept = el => { const m = cur(); const c = chapterById(m, Route.a); stSync(m, c); const s = story(c); const f = s.fixes[+el.dataset.i]; if (!f) return; bibleFromChapter(m, c, el, `"${f.original}"${f.why ? ' (me lo marcaste porque: ' + f.why + ')' : ''}`, () => { s.fixes = s.fixes.filter(x => x !== f); }); };
