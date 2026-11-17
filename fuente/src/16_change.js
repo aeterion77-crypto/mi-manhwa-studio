@@ -244,13 +244,23 @@ function capTruth(c) { const t = (c.story?.text || '').trim(); return t ? t.slic
 async function bibleFromChapter(m, c, el, focus = '', done = null) {
   const body = capTruth(c); if (!body.trim()) return toast('Este capítulo todavía no tiene texto ni guion', 'err');
   const q = focus
-    ? `En el Capítulo ${c.number} decidí esto y ES CORRECTO (no es un error, así lo quiero): «${focus}». Actualiza mi biblia y todo mi manhwa para que coincida.\n\nCAPÍTULO ${c.number} (la verdad):\n${body}`
+    ? `En el Capítulo ${c.number} decidí lo siguiente y ES CORRECTO (no son errores, así lo quiero):\n${focus}\n Actualiza mi biblia y todo mi manhwa para que coincida.\n\nCAPÍTULO ${c.number} (la verdad):\n${body}`
     : `Actualiza mi biblia y todo mi manhwa con lo que pasa en el Capítulo ${c.number}: todo lo que cambié o agregué en él es CORRECTO.\n\nCAPÍTULO ${c.number} (la verdad):\n${body}`;
   let r; await busy(el, async () => { r = await aiJSON(gxPrompt(m, q, { fromChapter: c.id }), { max_tokens: 16000, temperature: 0.2, title: `Actualizar biblia con el Cap ${c.number}`, estOut: 4000 }); }, 'Comparando con tu biblia…');
   if (!r) return;
-  gxReview(m, focus ? `Cap ${c.number}: así lo quiero (${focus.slice(0, 80)})` : `Actualizar mi biblia con el Cap ${c.number}`, r, { skipChapter: c.id, done });
+  gxReview(m, focus ? `Cap ${c.number}: así lo quiero` : `Actualizar mi biblia con el Cap ${c.number}`, r, { skipChapter: c.id, done });
 }
 ACT.capToBible = el => { const m = cur(); const c = chapterById(m, Route.a); if (typeof stSync === 'function' && $('#stTxt')) stSync(m, c); bibleFromChapter(m, c, el, '', () => { c.warnings = []; if (c.story) c.story.fixes = []; c.bibleAt = Date.now(); }); };
 ACT.warnAccept = el => { const m = cur(); const c = chapterById(m, Route.a); const i = +el.dataset.i; const w = (c.warnings || [])[i]; if (!w) return; bibleFromChapter(m, c, el, `${w.message}${w.panel ? ' (panel ' + w.panel + ')' : ''}`, () => { c.warnings = (c.warnings || []).filter(x => x !== w); }); };
 ACT.deadAccept = el => { const m = cur(); const c = chapterById(m, Route.a); bibleFromChapter(m, c, el, el.dataset.msg || ''); };
 ACT.fixAccept = el => { const m = cur(); const c = chapterById(m, Route.a); stSync(m, c); const s = story(c); const f = s.fixes[+el.dataset.i]; if (!f) return; bibleFromChapter(m, c, el, `"${f.original}"${f.why ? ' (me lo marcaste porque: ' + f.why + ')' : ''}`, () => { s.fixes = s.fixes.filter(x => x !== f); }); };
+
+/* ✔ Así lo quiero: todos los avisos que quedan, de una vez */
+ACT.deadIgnore = el => { const m = cur(); const c = chapterById(m, Route.a); (c.ignoredDead ||= []).push(el.dataset.msg); touch(m); render(); };
+ACT.acceptAll = el => {
+  const m = cur(); const c = chapterById(m, Route.a); if ($('#stTxt')) stSync(m, c);
+  const w = c.warnings || []; const dead = localDeadCheck(m, c).filter(x => !(c.ignoredDead || []).includes(x)); const fx = c.story?.fixes || [];
+  const list = [...w.map(x => `${x.message}${x.panel ? ' (panel ' + x.panel + ')' : ''}`), ...dead, ...fx.map(f => `"${f.original}"${f.why ? ' (marcado porque: ' + f.why + ')' : ''}`)];
+  if (!list.length) return toast('No hay avisos', 'ok');
+  bibleFromChapter(m, c, el, list.map((x, i) => `${i + 1}) ${x}`).join('\n'), () => { c.warnings = []; if (c.story) c.story.fixes = []; c.ignoredDead = [...new Set([...(c.ignoredDead || []), ...dead])]; });
+};

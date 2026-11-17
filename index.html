@@ -1468,7 +1468,7 @@ function buildPanelPrompt(m, p) {
 VIEWS.cap = () => {
   const m = cur(); const c = chapterById(m, Route.a); if (!c) return '<div class="empty">Capítulo no encontrado.</div>';
   const w = c.warnings || [];
-  const dead = localDeadCheck(m, c);
+  const dead = localDeadCheck(m, c).filter(x => !(c.ignoredDead || []).includes(x));
   const genN = (c.panels || []).filter(p => p.approved && !p.imageId).length;
   return `<div class="head"><div><h1>Cap ${c.number} · ${esc(c.title || 'Sin título')}</h1><div class="row" style="margin-top:6px">${statusChip(c.status)}<span class="chip">${plural(c.panels.length, 'panel', 'paneles')}</span></div></div>
     <div class="row"><button data-a="go" data-to="${mlink(m, 'caps')}">← Capítulos</button><button data-a="go" data-to="${mlink(m, 'armador', c.id)}">🧩 Armador</button><button data-a="dlChapter" data-id="${c.id}">⬇ Guion (Word)</button><button data-a="dlChapter" data-id="${c.id}" data-img="1">⬇ Word con imágenes</button><button data-a="dlChapterImgs" data-id="${c.id}">⬇ Imágenes</button><button class="danger" data-a="delCap" data-id="${c.id}">🗑️</button></div></div>
@@ -1485,9 +1485,9 @@ VIEWS.cap = () => {
       </div>
       <div class="col">
         <div class="panelbox"><h2>🛡️ Continuidad</h2>
-          ${dead.map(x => `<div class="alert bad"><div class="grow">☠️ ${esc(x)}</div><button class="sm ok" data-a="deadAccept" data-msg="${esc(x)}" title="No es error: actualiza tu biblia y todo para que esto sea correcto">✔ Así lo quiero</button></div>`).join('')}
-          ${w.length ? w.map((x, i) => `<div class="alert ${x.severity === 'alta' ? 'bad' : 'warn'}"><div class="grow"><b>${esc(x.type || 'Aviso')}${x.panel ? ' · Panel ' + x.panel : ''}:</b> ${esc(x.message)}${x.suggestion ? `<div class="small" style="opacity:.85;margin-top:4px">💡 ${esc(x.suggestion)}</div>` : ''}</div><button class="sm ok" data-a="warnAccept" data-i="${i}" title="No es error: actualiza tu biblia y todo para que esto sea correcto">✔ Así lo quiero</button><button class="sm icon ghost" data-a="dismissWarn" data-i="${i}">✕</button></div>`).join('') : (dead.length ? '' : '<p class="muted small">Sin avisos. Revisa la continuidad cuando tengas el guion.</p>')}
-          <div class="row"><button data-a="checkCont">🔍 Revisar continuidad</button><button class="pri" data-a="capToBible">📜 Actualizar mi biblia con este capítulo</button><button class="ok" data-a="finishCap">✅ Terminar capítulo</button></div>
+          ${dead.map(x => `<div class="alert bad"><div class="grow">☠️ ${esc(x)}</div><button class="sm icon ghost" data-a="deadIgnore" data-msg="${esc(x)}" title="Ignorar">✕</button></div>`).join('')}
+          ${w.length ? w.map((x, i) => `<div class="alert ${x.severity === 'alta' ? 'bad' : 'warn'}"><div class="grow"><b>${esc(x.type || 'Aviso')}${x.panel ? ' · Panel ' + x.panel : ''}:</b> ${esc(x.message)}${x.suggestion ? `<div class="small" style="opacity:.85;margin-top:4px">💡 ${esc(x.suggestion)}</div>` : ''}</div><button class="sm icon ghost" data-a="dismissWarn" data-i="${i}">✕</button></div>`).join('') : (dead.length ? '' : '<p class="muted small">Sin avisos. Revisa la continuidad cuando tengas el guion.</p>')}
+          <div class="row"><button data-a="checkCont">🔍 Revisar continuidad</button>${w.length || dead.length ? `<button class="ok" data-a="acceptAll" title="Los avisos que dejes (ignora con ✕ los que sí son error) se toman como correctos y se actualiza tu biblia y todo">✔ Así lo quiero (${w.length + dead.length})</button>` : ''}<button class="pri" data-a="capToBible">📜 Actualizar mi biblia con este capítulo</button><button class="ok" data-a="finishCap">✅ Terminar capítulo</button></div>
           <p class="tiny dim">“Terminar capítulo” detecta nuevos hechos y te los propone. Tú das CONSERVAR.</p>
         </div>
         <div class="panelbox"><h2>🎨 Imágenes</h2>${typeof wkTip === 'function' ? wkTip('obrero', `dibuja los paneles de este capítulo con la cara de tu prota · ${mx(0.012)} por panel en 1K (este capítulo: ${mx(0.012 * c.panels.length)}).`) : ''}
@@ -5210,7 +5210,7 @@ function coWriteHTML(m, c) {
       <button data-a="stAsk">💬 Pregúntale a Claude</button>
     </div>
     ${s.answer ? `<div class="alert info" style="margin-top:10px"><div class="grow"><b>Claude:</b> ${esc(s.answer).replace(/\n/g, '<br>')}</div><button class="sm icon ghost" data-a="stAnsClose">✕</button></div>` : ''}
-    ${s.fixes.length ? `<div class="sect" style="margin-top:10px"><h3 style="margin:0 0 6px">🩹 Correcciones de Claude (${s.fixes.length})</h3>${s.fixes.map((f, i) => `<div class="alert warn" style="margin-bottom:6px"><div class="grow"><div class="small"><s style="opacity:.7">${esc(f.original)}</s></div><div class="small"><b>→ ${esc(f.fix)}</b></div>${f.why ? `<div class="tiny dim">${esc(f.why)}</div>` : ''}</div><div class="col" style="gap:4px"><button class="sm ok" data-a="stFixApply" data-i="${i}">Aplicar</button><button class="sm" data-a="fixAccept" data-i="${i}" title="No es error: así lo quiero, actualiza mi biblia y todo">✔ Así lo quiero</button><button class="sm ghost" data-a="stFixSkip" data-i="${i}">Ignorar</button></div></div>`).join('')}<div class="row"><button class="sm ok" data-a="stFixAll">Aplicar todas</button><button class="sm ghost" data-a="stFixClear">Ignorar todas</button></div></div>` : ''}
+    ${s.fixes.length ? `<div class="sect" style="margin-top:10px"><h3 style="margin:0 0 6px">🩹 Correcciones de Claude (${s.fixes.length})</h3>${s.fixes.map((f, i) => `<div class="alert warn" style="margin-bottom:6px"><div class="grow"><div class="small"><s style="opacity:.7">${esc(f.original)}</s></div><div class="small"><b>→ ${esc(f.fix)}</b></div>${f.why ? `<div class="tiny dim">${esc(f.why)}</div>` : ''}</div><div class="col" style="gap:4px"><button class="sm ok" data-a="stFixApply" data-i="${i}">Aplicar</button><button class="sm ghost" data-a="stFixSkip" data-i="${i}">Ignorar</button></div></div>`).join('')}<div class="row"><button class="sm ok" data-a="stFixAll">Aplicar todas</button><button class="sm" data-a="acceptAll" title="Lo que dejes se toma como correcto: no cambio tu texto y actualizo tu biblia y todo">✔ Así lo quiero (todas)</button><button class="sm ghost" data-a="stFixClear">Ignorar todas</button></div></div>` : ''}
     <div class="row" style="margin-top:12px;border-top:1px solid var(--line);padding-top:12px">
       <button class="ok" data-a="stToScript" ${words ? '' : 'disabled'}>🎞️ Convertir en guion de paneles</button>
       <button data-a="stToNovel" ${words ? '' : 'disabled'}>🎧 Guardar como versión novela</button>
@@ -5674,16 +5674,26 @@ function capTruth(c) { const t = (c.story?.text || '').trim(); return t ? t.slic
 async function bibleFromChapter(m, c, el, focus = '', done = null) {
   const body = capTruth(c); if (!body.trim()) return toast('Este capítulo todavía no tiene texto ni guion', 'err');
   const q = focus
-    ? `En el Capítulo ${c.number} decidí esto y ES CORRECTO (no es un error, así lo quiero): «${focus}». Actualiza mi biblia y todo mi manhwa para que coincida.\n\nCAPÍTULO ${c.number} (la verdad):\n${body}`
+    ? `En el Capítulo ${c.number} decidí lo siguiente y ES CORRECTO (no son errores, así lo quiero):\n${focus}\n Actualiza mi biblia y todo mi manhwa para que coincida.\n\nCAPÍTULO ${c.number} (la verdad):\n${body}`
     : `Actualiza mi biblia y todo mi manhwa con lo que pasa en el Capítulo ${c.number}: todo lo que cambié o agregué en él es CORRECTO.\n\nCAPÍTULO ${c.number} (la verdad):\n${body}`;
   let r; await busy(el, async () => { r = await aiJSON(gxPrompt(m, q, { fromChapter: c.id }), { max_tokens: 16000, temperature: 0.2, title: `Actualizar biblia con el Cap ${c.number}`, estOut: 4000 }); }, 'Comparando con tu biblia…');
   if (!r) return;
-  gxReview(m, focus ? `Cap ${c.number}: así lo quiero (${focus.slice(0, 80)})` : `Actualizar mi biblia con el Cap ${c.number}`, r, { skipChapter: c.id, done });
+  gxReview(m, focus ? `Cap ${c.number}: así lo quiero` : `Actualizar mi biblia con el Cap ${c.number}`, r, { skipChapter: c.id, done });
 }
 ACT.capToBible = el => { const m = cur(); const c = chapterById(m, Route.a); if (typeof stSync === 'function' && $('#stTxt')) stSync(m, c); bibleFromChapter(m, c, el, '', () => { c.warnings = []; if (c.story) c.story.fixes = []; c.bibleAt = Date.now(); }); };
 ACT.warnAccept = el => { const m = cur(); const c = chapterById(m, Route.a); const i = +el.dataset.i; const w = (c.warnings || [])[i]; if (!w) return; bibleFromChapter(m, c, el, `${w.message}${w.panel ? ' (panel ' + w.panel + ')' : ''}`, () => { c.warnings = (c.warnings || []).filter(x => x !== w); }); };
 ACT.deadAccept = el => { const m = cur(); const c = chapterById(m, Route.a); bibleFromChapter(m, c, el, el.dataset.msg || ''); };
 ACT.fixAccept = el => { const m = cur(); const c = chapterById(m, Route.a); stSync(m, c); const s = story(c); const f = s.fixes[+el.dataset.i]; if (!f) return; bibleFromChapter(m, c, el, `"${f.original}"${f.why ? ' (me lo marcaste porque: ' + f.why + ')' : ''}`, () => { s.fixes = s.fixes.filter(x => x !== f); }); };
+
+/* ✔ Así lo quiero: todos los avisos que quedan, de una vez */
+ACT.deadIgnore = el => { const m = cur(); const c = chapterById(m, Route.a); (c.ignoredDead ||= []).push(el.dataset.msg); touch(m); render(); };
+ACT.acceptAll = el => {
+  const m = cur(); const c = chapterById(m, Route.a); if ($('#stTxt')) stSync(m, c);
+  const w = c.warnings || []; const dead = localDeadCheck(m, c).filter(x => !(c.ignoredDead || []).includes(x)); const fx = c.story?.fixes || [];
+  const list = [...w.map(x => `${x.message}${x.panel ? ' (panel ' + x.panel + ')' : ''}`), ...dead, ...fx.map(f => `"${f.original}"${f.why ? ' (marcado porque: ' + f.why + ')' : ''}`)];
+  if (!list.length) return toast('No hay avisos', 'ok');
+  bibleFromChapter(m, c, el, list.map((x, i) => `${i + 1}) ${x}`).join('\n'), () => { c.warnings = []; if (c.story) c.story.fixes = []; c.ignoredDead = [...new Set([...(c.ignoredDead || []), ...dead])]; });
+};
 
 /* =====================================================================
    📚 SECCIONES DE MI BIBLIA + "TODO LO QUE TENGO"

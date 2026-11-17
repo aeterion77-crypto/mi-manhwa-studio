@@ -68,7 +68,7 @@ function buildPanelPrompt(m, p) {
 VIEWS.cap = () => {
   const m = cur(); const c = chapterById(m, Route.a); if (!c) return '<div class="empty">Capítulo no encontrado.</div>';
   const w = c.warnings || [];
-  const dead = localDeadCheck(m, c);
+  const dead = localDeadCheck(m, c).filter(x => !(c.ignoredDead || []).includes(x));
   const genN = (c.panels || []).filter(p => p.approved && !p.imageId).length;
   return `<div class="head"><div><h1>Cap ${c.number} · ${esc(c.title || 'Sin título')}</h1><div class="row" style="margin-top:6px">${statusChip(c.status)}<span class="chip">${plural(c.panels.length, 'panel', 'paneles')}</span></div></div>
     <div class="row"><button data-a="go" data-to="${mlink(m, 'caps')}">← Capítulos</button><button data-a="go" data-to="${mlink(m, 'armador', c.id)}">🧩 Armador</button><button data-a="dlChapter" data-id="${c.id}">⬇ Guion (Word)</button><button data-a="dlChapter" data-id="${c.id}" data-img="1">⬇ Word con imágenes</button><button data-a="dlChapterImgs" data-id="${c.id}">⬇ Imágenes</button><button class="danger" data-a="delCap" data-id="${c.id}">🗑️</button></div></div>
@@ -85,9 +85,9 @@ VIEWS.cap = () => {
       </div>
       <div class="col">
         <div class="panelbox"><h2>🛡️ Continuidad</h2>
-          ${dead.map(x => `<div class="alert bad"><div class="grow">☠️ ${esc(x)}</div><button class="sm ok" data-a="deadAccept" data-msg="${esc(x)}" title="No es error: actualiza tu biblia y todo para que esto sea correcto">✔ Así lo quiero</button></div>`).join('')}
-          ${w.length ? w.map((x, i) => `<div class="alert ${x.severity === 'alta' ? 'bad' : 'warn'}"><div class="grow"><b>${esc(x.type || 'Aviso')}${x.panel ? ' · Panel ' + x.panel : ''}:</b> ${esc(x.message)}${x.suggestion ? `<div class="small" style="opacity:.85;margin-top:4px">💡 ${esc(x.suggestion)}</div>` : ''}</div><button class="sm ok" data-a="warnAccept" data-i="${i}" title="No es error: actualiza tu biblia y todo para que esto sea correcto">✔ Así lo quiero</button><button class="sm icon ghost" data-a="dismissWarn" data-i="${i}">✕</button></div>`).join('') : (dead.length ? '' : '<p class="muted small">Sin avisos. Revisa la continuidad cuando tengas el guion.</p>')}
-          <div class="row"><button data-a="checkCont">🔍 Revisar continuidad</button><button class="pri" data-a="capToBible">📜 Actualizar mi biblia con este capítulo</button><button class="ok" data-a="finishCap">✅ Terminar capítulo</button></div>
+          ${dead.map(x => `<div class="alert bad"><div class="grow">☠️ ${esc(x)}</div><button class="sm icon ghost" data-a="deadIgnore" data-msg="${esc(x)}" title="Ignorar">✕</button></div>`).join('')}
+          ${w.length ? w.map((x, i) => `<div class="alert ${x.severity === 'alta' ? 'bad' : 'warn'}"><div class="grow"><b>${esc(x.type || 'Aviso')}${x.panel ? ' · Panel ' + x.panel : ''}:</b> ${esc(x.message)}${x.suggestion ? `<div class="small" style="opacity:.85;margin-top:4px">💡 ${esc(x.suggestion)}</div>` : ''}</div><button class="sm icon ghost" data-a="dismissWarn" data-i="${i}">✕</button></div>`).join('') : (dead.length ? '' : '<p class="muted small">Sin avisos. Revisa la continuidad cuando tengas el guion.</p>')}
+          <div class="row"><button data-a="checkCont">🔍 Revisar continuidad</button>${w.length || dead.length ? `<button class="ok" data-a="acceptAll" title="Los avisos que dejes (ignora con ✕ los que sí son error) se toman como correctos y se actualiza tu biblia y todo">✔ Así lo quiero (${w.length + dead.length})</button>` : ''}<button class="pri" data-a="capToBible">📜 Actualizar mi biblia con este capítulo</button><button class="ok" data-a="finishCap">✅ Terminar capítulo</button></div>
           <p class="tiny dim">“Terminar capítulo” detecta nuevos hechos y te los propone. Tú das CONSERVAR.</p>
         </div>
         <div class="panelbox"><h2>🎨 Imágenes</h2>${typeof wkTip === 'function' ? wkTip('obrero', `dibuja los paneles de este capítulo con la cara de tu prota · ${mx(0.012)} por panel en 1K (este capítulo: ${mx(0.012 * c.panels.length)}).`) : ''}
