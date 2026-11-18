@@ -82,12 +82,13 @@ ACT.mdSync = async el => {
   if (!r) return; gxReview(m, 'Repartir cambios de mi biblia', r, { noDoc: true, after: () => { mdSynced(m); } });
 };
 /* ---------- 📥 fichas → documento ---------- */
-ACT.mdPull = async el => {
-  const m = cur(); const M = master(m); const ch = snapDiff(m); if (!ch.length) return;
+ACT.mdPull = el => mdPullRun(cur(), el);
+async function mdPullRun(m, el, then = null) {
+  const M = master(m); const ch = snapDiff(m); if (!ch.length) { if (then) then(); return; }
   const heads = docHeads(M.text);
   let r; await busy(el, async () => { r = await aiJSON(mdPullPrompt(m, ch), { max_tokens: 12000, temperature: 0.2, title: 'Pasar cambios a mi biblia' }); }, 'Escribiendo en tu biblia…');
-  if (!r) return; gxReview(m, 'Pasar a mi biblia lo que cambié en las fichas', r, { onlyDoc: true, after: () => { M.snap = fieldsSnap(m); M.syncedText = M.text; } });
-};
+  if (!r) return; gxReview(m, 'Pasar a mi biblia lo que cambié en las fichas', r, { onlyDoc: true, after: () => { M.snap = fieldsSnap(m); M.syncedText = M.text; }, done: then });
+}
 function mdPullPrompt(m, ch) { const M = master(m); const heads = docHeads(M.text); return `Eres el editor del documento de la biblia de "${m.name}". El autor cambió estas cosas en su manhwa y ahora hay que ESCRIBIRLAS EN SU DOCUMENTO DE LA BIBLIA para que esté al día. Respeta su forma de escribir y ponlas en la parte que corresponde.
 
 CAMBIOS EN LAS FICHAS:
@@ -113,7 +114,19 @@ async function mdAutoWrite(m) {
   return n;
 }
 ACT.mdRebuild = async () => { const m = cur(); const M = master(m); if (!await confirmBox('Esto escribe tu biblia de nuevo usando lo que tiene la app (fichas, secciones, capítulos). Tu documento actual se guarda en “Versiones que subiste”. ¿Seguir?', { ok: 'Rehacer', danger: false })) return; (m.bible.sources ||= []).push({ id: uid('doc_'), name: 'Respaldo antes de rehacer', text: M.text, at: Date.now() }); M.text = composeDoc(m); M.from = 'generado'; mdSynced(m); touch(m); render(); toast('📜 Documento rehecho', 'ok'); };
-ACT.dlMaster = async el => { const m = cur(); const M = master(m); await busy(el, async () => { await docxLib(); const { P, H } = D(); const blocks = M.text.split('\n').map(l => { const t = l.trim(); if (!t) return P(''); if (isHead(t)) return H(t.replace(/^#+\s*/, ''), t === t.toUpperCase() ? 1 : 2); return P(t.replace(/^[-•*]\s+/, '• ')); }); downloadBlob(await makeDocx('Biblia - ' + m.name, blocks), `Biblia - ${fileSafe(m.name)}.docx`); toast('📜 Tu biblia descargada en Word ✔', 'ok'); }, 'Creando Word…'); };
+ACT.dlMaster = async (el, e, force) => {
+  const m = cur(); const M = master(m);
+  if (!force) {
+    const ch = snapDiff(m); const caps = chapterList(m).filter(c => (c.story?.text || '').trim() && (c.storyAt || 0) > (c.bibleAt || 0) || (typeof scriptAhead === 'function' && scriptAhead(c)));
+    const pend = M.text !== M.syncedText;
+    if (ch.length || caps.length) {
+      const pick = await choiceBox('📥 Antes de descargar', `${ch.length ? `Tienes <b>${plural(ch.length, 'cambio', 'cambios')}</b> ${ch.length > 1 ? 'hechos' : 'hecho'} directo en las fichas que todavía no ${ch.length > 1 ? 'están escritos' : 'está escrito'} en tu biblia <span class="tiny dim">(${esc(ch.slice(0, 3).map(x => x.l).join(' · '))}${ch.length > 3 ? '…' : ''})</span>.<br>` : ''}${caps.length ? `${caps.map(c => 'Cap ' + c.number).join(', ')} ${caps.length > 1 ? 'tienen' : 'tiene'} cambios en su texto o sus paneles que no has pasado a tu biblia (se pasan dentro del capítulo con “✔ Así lo quiero”).<br>` : ''}${pend ? 'Y tienes cambios en tu biblia sin repartir (eso no afecta la descarga).<br>' : ''}<br>¿Qué hago?`,
+        [...(ch.length ? [{ label: '📜 Pasar los cambios de las fichas y luego descargar', value: 'pull', cls: 'pri' }] : []), { label: '⬇ Descargar así como está', value: 'dl' }, { label: 'Cancelar', value: null }]);
+      if (!pick) return;
+      if (pick === 'pull') return mdPullRun(m, el, () => setTimeout(() => ACT.dlMaster(null, null, true), 300));
+    }
+  }
+  await busy(el, async () => { await docxLib(); const { P, H } = D(); const blocks = M.text.split('\n').map(l => { const t = l.trim(); if (!t) return P(''); if (isHead(t)) return H(t.replace(/^#+\s*/, ''), t === t.toUpperCase() ? 1 : 2); return P(t.replace(/^[-•*]\s+/, '• ')); }); downloadBlob(await makeDocx('Biblia - ' + m.name, blocks), `Biblia - ${fileSafe(m.name)}.docx`); toast('📜 Tu biblia descargada en Word ✔', 'ok'); }, 'Creando Word…'); };
 const isHead = t => /^#+\s/.test(t) || (t.length < 70 && !/[.,;:]$/.test(t) && (t === t.toUpperCase() && /[A-ZÁÉÍÓÚÑ]/.test(t) || /^(cap[ií]tulo|parte|libro|arco|acto)\b/i.test(t)));
 function docHeads(text) { return text.split('\n').map(l => l.trim()).filter(isHead).slice(0, 200); }
 function docParas(text, about, m) { const kw = gxKeywords(m, about); const P = text.split(/\n\s*\n/); return P.filter(p => gxHit(p, kw)).slice(0, 40).map(p => '«' + p.slice(0, 1500) + '»').join('\n'); }

@@ -5,7 +5,7 @@
    conviertes en guion de paneles o lo guardas como versión novela.
    ===================================================================== */
 function story(c) { const s = (c.story ||= { text: '', note: '', want: '', undo: [], last: null, answer: '', fixes: [] }); s.undo ||= []; s.fixes ||= []; return s; }
-function stSnap(c) { const s = story(c); s.undo.push(s.text); if (s.undo.length > 40) s.undo.shift(); }
+function stSnap(c) { c.storyAt = Date.now() + 1; const s = story(c); s.undo.push(s.text); if (s.undo.length > 40) s.undo.shift(); }
 function stArea() { return $('#stTxt'); }
 function stSync(m, c) { const t = stArea(); if (t) { story(c).text = t.value; touch(m); } }
 function coWriteHTML(m, c) {
@@ -49,7 +49,7 @@ function coWriteHTML(m, c) {
 function coWriteMount() {
   if (Route.view !== 'cap') return; const m = cur(); const c = chapterById(m, Route.a); if (!c) return;
   const t = stArea(); if (!t) return;
-  let tm; t.oninput = () => { clearTimeout(tm); tm = setTimeout(() => { story(c).text = t.value; touch(m); const w = t.value.trim() ? t.value.trim().split(/\s+/).length : 0; const el = $('#stCount'); if (el) el.textContent = w + ' palabras'; }, 400); };
+  let tm; t.oninput = () => { clearTimeout(tm); tm = setTimeout(() => { story(c).text = t.value; c.storyAt = Date.now(); touch(m); const w = t.value.trim() ? t.value.trim().split(/\s+/).length : 0; const el = $('#stCount'); if (el) el.textContent = w + ' palabras'; }, 400); };
   const w = $('#stWant'); if (w) w.oninput = () => { story(c).want = w.value; };
   const s = story(c);
   if (s.last && s.last.end <= t.value.length && s.focus) { t.focus(); t.setSelectionRange(s.last.start, s.last.end); t.scrollTop = t.scrollHeight; s.focus = false; }
