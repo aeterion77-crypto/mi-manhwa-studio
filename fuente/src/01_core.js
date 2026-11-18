@@ -376,6 +376,7 @@ function render() {
   if (typeof coWriteMount === 'function') coWriteMount();
   if (typeof docMount === 'function') docMount();
   if (typeof mdMount === 'function') mdMount();
+  if (typeof askMount === 'function') { askMount(); askHighlight(); }
   const after = AFTER[Route.view]; if (after) try { after(); } catch (e) { console.error(e); }
   window.scrollTo({ top: 0 });
 }

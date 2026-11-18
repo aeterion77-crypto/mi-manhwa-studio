@@ -208,7 +208,8 @@ ACT.gxUndo = async () => {
 function gxHTML(m) {
   const log = m.changeLog || [];
   return `<div class="panelbox" style="margin-bottom:16px;border-color:var(--neon)">
-    <h2 style="margin-top:0">🪄 Cambiar o agregar algo a mi manhwa</h2>
+    ${typeof askHTML === 'function' ? askHTML(m) : ''}
+    <h2 style="margin-top:14px">🪄 Cambiar o agregar algo a mi manhwa</h2>
     <p class="small muted">Escríbelo como en el chat. <b>Para cambiar:</b> Claude busca dónde aparece (biblia, fichas, canon, capítulos, texto, paneles, diálogos) y lo cambia en todos lados. <b>Para agregar:</b> dile dónde va, o solo pégalo y Claude lo acomoda. Todo se escribe <b>primero en tu documento de la biblia</b> y de ahí se reparte a todos lados. Siempre te muestra todo antes de guardar.</p>
     <textarea id="gxQ" style="min-height:110px" placeholder="Cambiar: “Kael ahora tiene 19 años”, “el maná ahora se llama aura”, “Lira no muere en el cap 5”&#10;Agregar diciendo dónde: “agrega en personajes a Mira, sanadora de 16 años, hermana de Lira”, “pon en el glosario: Velo = frontera entre mundos”&#10;Agregar sin decir dónde: pega cualquier texto nuevo de tu historia y Claude lo acomoda"></textarea>
     <div class="row" style="margin-top:8px"><button class="pri" data-a="gxRun">🪄 Cambiar / acomodar en todos lados</button><button class="pri" data-a="go" data-to="${mlink(m, 'bibliadoc', 'base')}">📜 Abrir y editar mi biblia (documento)</button><button data-a="go" data-to="${mlink(m, 'bibliadoc', 'viva')}">🗂️ Ver cómo quedó repartida</button><button data-a="gxUndo">↩️ Deshacer el último</button></div>
@@ -233,7 +234,7 @@ function gxEmpty(m, path) {
 
 /* barra compacta para agregar / cambiar / quitar (en biblia, canon, secciones, capítulos) */
 function gxBar(m, ph = '') {
-  return `<div class="gxbar"><div class="row nw" style="align-items:flex-start;gap:8px"><span style="font-size:22px;padding-top:6px">🪄</span>
+  return `<div class="gxbar">${typeof askHTML === 'function' ? askHTML(m) : ''}<div class="row nw" style="align-items:flex-start;gap:8px"><span style="font-size:22px;padding-top:6px">🪄</span>
     <textarea id="gxQ" rows="2" placeholder="${esc(ph || 'Agrega, cambia o quita lo que quieras y Claude lo acomoda en todos lados. Ej. “Tomás, el amigo de Elías, no existe: quítalo y arregla esa parte de la historia”')}"></textarea>
     <div class="col" style="gap:6px"><button class="pri" data-a="gxRun">Hacerlo</button><button class="sm ghost" data-a="gxUndo" title="Deshacer el último cambio">↩️</button></div></div>
     <div class="tiny dim" style="margin:4px 0 0 32px">Se escribe primero en 📜 tu biblia y de ahí se reparte a fichas, canon, historia, capítulos y paneles. Siempre te muestro todo antes de guardar.</div></div>`;
