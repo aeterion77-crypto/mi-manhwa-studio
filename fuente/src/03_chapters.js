@@ -114,7 +114,8 @@ function panelCard(m, c, p, i) {
   const U = ` data-onchange="unapprove" data-pid="${p.id}"`;
   return `<div class="pcard ${p.size}" id="pc_${p.id}">
     <div class="col" style="gap:8px"><div class="pimg" ${p.imageId ? `data-img="${p.imageId}"` : ''} data-a="panelImg" data-i="${i}">${p.imageId ? '' : '<span class="ph-t">Sin imagen<br>toca para subir</span>'}</div>
-      <button class="sm" data-a="genPanel" data-i="${i}">⚡ Generar</button>${p.seed != null ? `<span class="tiny dim">seed ${p.seed}</span>` : ''}</div>
+      <button class="sm" data-a="genPanel" data-i="${i}">⚡ Generar</button>${p.imageId && typeof wkOn === 'function' && wkOn() ? `<button class="sm" data-a="panelFixImg" data-i="${i}" title="Cambiar algo de esta imagen sin dibujarla de nuevo">✏️ Corregir</button>` : ''}${p.seed != null ? `<span class="tiny dim">seed ${p.seed}</span>` : ''}
+      ${typeof refsHTML === 'function' && typeof wkOn === 'function' && wkOn() ? refsHTML(m, p.refs, 'pan:' + c.id + ':' + p.id) : ''}</div>
     <div class="col" style="gap:10px">
       <div class="row between"><div class="row"><span class="pnum">#${i + 1}</span><select style="width:auto;min-height:36px;padding:4px 8px" ${bindAttr(p, 'size')}${U}>${Object.entries(SIZES).map(([k, v]) => `<option value="${k}" ${p.size === k ? 'selected' : ''}>${k} · ${v}</option>`).join('')}</select><input style="width:170px;min-height:36px;padding:4px 10px" placeholder="Plano (ej. primer plano)" ${bindAttr(p, 'shot')}${U} value="${esc(p.shot)}"></div>
         <div class="row"><button class="sm icon" data-a="movePanel" data-i="${i}" data-d="-1" title="Subir">↑</button><button class="sm icon" data-a="movePanel" data-i="${i}" data-d="1" title="Bajar">↓</button><button class="sm icon" data-a="addPanel" data-i="${i + 1}" title="Insertar debajo">＋</button><button class="sm icon danger" data-a="delPanel" data-i="${i}" title="Borrar panel">🗑️</button></div></div>

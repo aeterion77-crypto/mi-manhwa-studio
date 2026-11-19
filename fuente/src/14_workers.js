@@ -59,8 +59,15 @@ function wkCost(k, n = 1, o = {}) {
 function fit1K(w, h) { const r = (h || 1) / (w || 1); let W = Math.sqrt(1048576 / r), H = W * r; W = Math.floor(W / 16) * 16; H = Math.floor(H / 16) * 16; return { w: W, h: H }; }
 const ARS = ['21:9', '2:1', '16:9', '3:2', '7:5', '4:3', '5:4', '1:1', '4:5', '3:4', '5:7', '2:3', '9:16', '1:2'];
 function nearestAR(w, h) { const r = w / h; return ARS.reduce((b, a) => { const [x, y] = a.split(':').map(Number); return Math.abs(Math.log(x / y / r)) < Math.abs(Math.log(b[1])) ? [a, x / y / r] : b; }, ['1:1', 99])[0]; }
-function workerReq(k, { prompt, loras = [], width = 800, height = 1200, seed, res = '1k' }) {
+function workerReq(k, { prompt, loras = [], width = 800, height = 1200, seed, res = '1k', image_urls = null }) {
   const W = WK[k]; const s = fit1K(width, height); const L = (loras || []).filter(l => l.path).slice(0, 3);
+  const R = image_urls && image_urls.length ? image_urls : null;
+  if (R) { // con imágenes de referencia (mismo precio)
+    if (k === 'artista' || k === 'portadas') return { app: 'blackforestlabs/flux-3/edit-image', input: { prompt, image_urls: R, resolution: res === '2k' ? '2k' : '1k', aspect_ratio: nearestAR(width, height), output_format: 'jpeg' } };
+    if (k === 'pruebas') return { app: 'blackforestlabs/flux-3/klein/edit-image', input: { prompt, image_urls: R, image_size: { width: s.w, height: s.h }, num_images: 1, seed, output_format: 'jpeg', enable_prompt_expansion: false } };
+    if (k === 'obrero') return { app: 'blackforestlabs/flux-3/klein/edit-image/lora', input: { prompt, image_urls: R, loras: L, image_size: { width: s.w, height: s.h }, num_images: 1, seed, output_format: 'jpeg', enable_prompt_expansion: false } };
+    if (k === 'obreroClasico') return { app: 'fal-ai/flux-lora/image-to-image', input: { prompt, image_url: R[0], strength: 0.82, loras: L, num_inference_steps: 28, guidance_scale: 3.5, num_images: 1, seed, output_format: 'jpeg', enable_safety_checker: true } };
+  }
   if (k === 'artista') return { app: W.app, input: { prompt, aspect_ratio: nearestAR(width, height), resolution: res === '2k' ? '2k' : '1k', output_format: 'jpeg' } };
   if (k === 'obrero') return { app: W.app, input: { prompt, loras: L, image_size: { width: s.w, height: s.h }, num_images: 1, seed, output_format: 'jpeg', enable_prompt_expansion: false } };
   if (k === 'pruebas') return { app: W.app, input: { prompt, image_size: { width: s.w, height: s.h }, num_images: 1, seed, output_format: 'jpeg', enable_prompt_expansion: false } };

@@ -25,8 +25,10 @@ function falRequest(m, o) {
 /* genera N imágenes con semillas propias (para poder repetir cualquiera) */
 async function falGenerate(m, opts, n = 1, meta = {}, { confirmed = false, title = 'Generar imágenes en Fal.ai' } = {}) {
   const st0 = m.bible.style; const W0 = opts.width || st0.width || 800, H0 = opts.height || st0.height || 1200;
+  if (opts.refs?.length) { if (!opts.worker) opts = { ...opts, worker: 'artista' }; if (opts.worker === 'portadas') opts = { ...opts, worker: 'artista' }; }
   const k = opts.worker || null; const one = k ? wkCost(k, 1, opts) : costImages(1, W0, H0);
-  if (!confirmed && !(k ? await confirmWorker(k, n, { res: opts.res, noun: opts.noun ? plural(n, ...opts.noun) : null }) : await confirmCost(title, [imgLine(n, W0, H0)]))) throw new Error('Cancelado');
+  if (!confirmed && !(k ? await confirmWorker(k, n, { res: opts.res, noun: opts.noun ? plural(n, ...opts.noun) : null, extra: opts.refs?.length ? `📎 Con ${plural(opts.refs.length, 'imagen', 'imágenes')} de referencia (no cuesta más).` : '' }) : await confirmCost(title, [imgLine(n, W0, H0)]))) throw new Error('Cancelado');
+  if (opts.refs?.length) { const R = await refsPrepare(m, opts.refs); if (R.urls.length) opts = { ...opts, image_urls: R.urls, prompt: R.text + ' ' + opts.prompt }; }
   const seeds = Array.from({ length: n }, (_, i) => opts.seed != null ? opts.seed + i : randSeed());
   const runs = seeds.map(async seed => {
     const req = falRequest(m, { ...opts, seed });
@@ -49,7 +51,7 @@ async function falGenerate(m, opts, n = 1, meta = {}, { confirmed = false, title
 /* el panel con su trabajador: El Obrero (1K) y solo los LoRAs que entiende */
 function panelReq(m, p) {
   const P = buildPanelPrompt(m, p); if (!wkOn()) return P;
-  const { k, loras } = wkForPanel(m, p); return { ...P, loras, worker: k };
+  const { k, loras } = wkForPanel(m, p); return { ...P, loras, worker: k, refs: (p.refs || []).length ? p.refs : undefined };
 }
 /* trabajador para un personaje: si ya aprendió con El Maestro → El Obrero; si no → El Artista */
 function charWorker(ch, fallback = 'artista') { if (!wkOn()) return null; const kd = loraKind(ch); return kd === 'klein' ? 'obrero' : kd === 'clasico' ? 'obreroClasico' : fallback; }
@@ -111,12 +113,15 @@ VIEWS.lora = () => {
 
     <div class="sect panelbox"><h2>1 · Describe a tu personaje como quieras</h2>${typeof wkTip === 'function' ? wkTip('artista', `crea la cara de tu personaje bonita · ${mx(0.048)} por imagen. Para probar ideas usa a ✏️ El de Pruebas (${mx(0.009)}).`) : ''}
       <textarea ${bindAttr(lab, 'desc')} placeholder="Quiero mi prota con pelo negro, lunar pequeño bajo el ojo derecho, ojos grises, chaqueta negra…">${esc(lab.desc)}</textarea>
+      <div class="small" style="margin:8px 0 2px"><b>📎 ¿Tienes una imagen de cómo lo quieres?</b> <span class="muted">Un dibujo tuyo, un boceto o una imagen parecida. Sale mucho más exacto desde la primera vez y no cuesta más.</span></div>
+      ${refsHTML(m, lab.refs, 'lab')}
       ${wkOn() ? `<div class="row small" style="margin:6px 0">¿Quién dibuja? <select id="labWho">${[['artista', '🎨 El Artista Caro (bonito, para crear la cara)'], ['pruebas', '✏️ El de Pruebas (garabatos casi gratis)'], ...(loraKind(ch) === 'klein' ? [['obrero', '👷 El Obrero (ya sabe su cara)']] : [])].map(([v, l]) => `<option value="${v}" ${(S.settings.labWho || (loraKind(ch) === 'klein' ? 'obrero' : 'artista')) === v ? 'selected' : ''}>${l} · ${mx(wkCost(v, 1))} c/u</option>`).join('')}</select></div>` : ''}
-      <div class="row"><button class="pri big" data-a="labStart">⚡ Generar 4 pruebas</button>${wkOn() ? `<button data-a="labTwenty">🎨 20 fotos para El Maestro (${mx(wkCost('artista', 20))})</button>` : ''}${lab.rounds.length ? `<span class="small muted">${plural(lab.rounds.length, 'ronda', 'rondas')}</span>` : ''}</div>
+      <div class="row small" style="margin:6px 0">¿Cuántas a la vez? <select id="labN">${[1, 2, 4].map(n => `<option ${(S.settings.labN || 4) === n ? 'selected' : ''}>${n}</option>`).join('')}</select> <span class="muted">menos = gastas menos por prueba</span></div>
+      <div class="row"><button class="pri big" data-a="labStart">⚡ Generar pruebas</button>${wkOn() ? `<button data-a="labTwenty">🎨 20 fotos para El Maestro (${mx(wkCost('artista', 20))})</button>` : ''}${lab.rounds.length ? `<span class="small muted">${plural(lab.rounds.length, 'ronda', 'rondas')}</span>` : ''}</div>
     </div>
     ${lab.rounds.length ? `<div class="sect panelbox"><h2>2 · Elige y corrige</h2><div class="rounds">${[...lab.rounds].reverse().map((r, ri) => `<div class="round"><div class="small muted">Ronda ${lab.rounds.length - ri}${r.feedback ? ` · tu corrección: “${esc(r.feedback)}”` : ''}</div>${r.notes ? `<div class="tiny dim">IA: ${esc(r.notes)}</div>` : ''}<details><summary class="tiny dim" style="cursor:pointer">ver prompt</summary><div class="prompt">${esc(r.prompt)}</div></details><div class="igrid" style="margin-top:8px">${r.imgs.map(id => imgTile(id, 'lab')).join('')}</div></div>`).join('')}</div>
       <label class="f">¿Qué no te gustó? (dilo normal)<textarea id="labFb" placeholder="No me gustó su lunar, está muy grande. El cabello más largo."></textarea></label>
-      <div class="row"><button class="pri" data-a="labFix">🔁 Corregir y generar 4 nuevas</button><button class="ok big" data-a="labSave" ${lab.chosen ? '' : 'disabled'}>💾 GUARDAR ESTE LOOK</button></div>
+      <div class="row"><button class="pri" data-a="labFix">🔁 Corregir</button>${lab.chosen ? `<label class="small row nw" style="gap:4px"><input type="checkbox" id="labOnChosen" checked> sobre la que elegí (más parecido, mismo precio)</label>` : ''}<button class="ok big" data-a="labSave" ${lab.chosen ? '' : 'disabled'}>💾 GUARDAR ESTE LOOK</button></div>
       <p class="tiny dim">Guardar fija el prompt, la semilla y la configuración de la imagen elegida en la ficha del personaje; se usa en todos sus paneles.</p></div>` : ''}
 
     <div class="sect panelbox"><div class="row between"><h2>3 · Hoja de modelo</h2><button data-a="sheetAll" ${ch.visualPrompt ? '' : 'disabled'}>⚡ Generar hoja completa (${SHEET_SLOTS.length})</button></div>${typeof wkTip === 'function' ? wkTip(loraKind(ch) === 'klein' ? 'obrero' : 'artista', loraKind(ch) === 'klein' ? `dibuja las 11 vistas y expresiones · ${mx(0.012 * 11)} todas.` : `dibuja las 11 vistas y expresiones · ${mx(0.048 * 11)} todas.`) : ''}
@@ -156,13 +161,16 @@ async function labRun(el, feedback) {
   const m = cur(); const ch = labChar(); const lab = ch.lab;
   if (!lab.desc.trim()) return toast('Describe primero a tu personaje', 'err');
   const who = wkOn() ? ($('#labWho')?.value || 'artista') : null; if (who) { S.settings.labWho = who; saveSettings(); }
-  if (who ? !await confirmWorker(who, 4, { extra: isPremium() ? '' : 'Además Claude convierte tu descripción en instrucciones (cuesta centavos).' }) : !await confirmCost(feedback ? 'Corregir y generar 4 nuevas' : 'Generar 4 pruebas', [aiLine(2500, 300, 800, 'Convertir tu descripción en prompt'), imgLine(4, 768, 1024)])) return;
+  const N = Number($('#labN')?.value) || S.settings.labN || 4; S.settings.labN = N; saveSettings();
+  const base = feedback && lab.chosen && $('#labOnChosen')?.checked !== false ? lab.chosen : null;
+  const refs = [...(base ? [{ id: base, role: 'editar' }] : []), ...(lab.refs || [])];
+  if (who ? !await confirmWorker(who, N, { extra: (refs.length ? `📎 Con ${plural(refs.length, 'imagen', 'imágenes')} de referencia${base ? ' (corrijo la que elegiste)' : ''}, no cuesta más. ` : '') + isPremium() ? '' : 'Además Claude convierte tu descripción en instrucciones (cuesta centavos).' }) : !await confirmCost(feedback ? 'Corregir y generar 4 nuevas' : 'Generar 4 pruebas', [aiLine(2500, 300, 800, 'Convertir tu descripción en prompt'), imgLine(4, 768, 1024)])) return;
   await busy(el, async () => {
     const last = lab.rounds[lab.rounds.length - 1];
     const p = await labPrompt(m, ch, lab.desc, feedback ? last?.prompt : null, feedback);
     const prompt = [m.bible.style.prefix, p.prompt].filter(Boolean).join(', ');
     const loras = ch.loraId ? [{ path: ch.loraId, scale: Number(ch.loraWeight) || 0.9 }] : [];
-    const ids = await falGenerate(m, { prompt, negative: m.bible.style.negative, loras, width: 768, height: 1024, worker: who }, 4, { character: ch.id, lab: true }, { confirmed: true });
+    const ids = await falGenerate(m, { prompt, negative: m.bible.style.negative, loras, width: 768, height: 1024, worker: who, refs }, N, { character: ch.id, lab: true }, { confirmed: true });
     lab.rounds.push({ id: uid('r_'), prompt, feedback: feedback || '', notes: p.notes || '', imgs: ids, at: Date.now() });
     lab.chosen = null; touch(m); render();
   }, 'Generando 4…');

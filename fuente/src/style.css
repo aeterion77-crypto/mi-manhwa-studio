@@ -354,3 +354,9 @@ input[type=radio],input[type=checkbox]{width:20px;min-height:20px;height:20px;fl
 .askhit mark,.askans mark{background:rgba(255,210,60,.35);color:inherit;border-radius:3px;padding:0 2px}
 .askans{margin-top:8px;padding:10px 12px;border:1px solid rgba(80,180,255,.45);background:rgba(80,180,255,.07);border-radius:12px}
 .gxbar .askbar{padding-bottom:8px;margin-bottom:8px;border-bottom:1px dashed rgba(255,255,255,.1)}
+
+.refs{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:4px 0}
+.refbox{display:flex;flex-direction:column;gap:4px;align-items:stretch;width:118px}
+.refbox select{font-size:12px;padding:3px 4px}
+.ithumb.sm{width:118px;height:118px}
+.refbox .icon{align-self:flex-end;margin-top:-4px}
